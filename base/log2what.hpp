@@ -7,6 +7,11 @@
 
 namespace log2what {
 using std::string;
+
+/**
+ * @brief base log class
+ *
+ */
 class log2 {
   private:
     writer *writer_ptr;
