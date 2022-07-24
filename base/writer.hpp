@@ -25,7 +25,6 @@ class writer {
         std::tm gtp = *std::gmtime(&t);
         std::tm ltp = *std::localtime(&t);
         int64_t gt = std::mktime(&gtp);
-        std::cout << t << " " << gt << std::endl;
         zone = (t - gt - (ltp.tm_isdst > 0 ? 3600 : 0)) / 3600;
     };
     ~writer() = default;
