@@ -17,11 +17,11 @@ using std::string;
  *
  */
 enum class level : int {
-    TRACE,
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR
+    TRACE = 1,
+    DEBUG = 2,
+    INFO = 4,
+    WARN = 8,
+    ERROR = 16
 };
 
 /**
@@ -79,7 +79,7 @@ int64_t get_nano_timestamp() {
 }
 
 /**
- * @brief time lock as for time-related is not thread-safe
+ * @brief time lock as for time-related is not thread-safe at c++11
  *
  */
 static std::mutex time_lock;
@@ -127,14 +127,12 @@ struct datetime {
  * @return datetime
  */
 datetime get_datetime(int64_t ts_sec, int ts_nano, int zone = 0) {
-    using namespace std;
     constexpr int HOUR_TO_SECOND = 3600;
     ts_sec += zone * HOUR_TO_SECOND;
     datetime dt{.zone = zone, .nano = ts_nano};
-    lock_guard<mutex> lock{time_lock};
+    std::lock_guard<std::mutex> lock{time_lock};
     dt.tp = *std::gmtime(&ts_sec);
     return dt;
 }
-
 } // namespace log2what
 #endif

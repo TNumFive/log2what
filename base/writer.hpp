@@ -6,39 +6,33 @@
 #include <string>
 
 namespace log2what {
-using std::string;
-
 /**
- * @brief base write class
+ * @brief base writer class
  *
  */
 class writer {
   private:
-    int zone;
-
   public:
-    writer(int z) : zone{z} {};
-    writer() {
-        // try to obtain the time zone by ctime fun localtime
-        int64_t t = get_timestamp<std::chrono::seconds>();
-        std::lock_guard<std::mutex> lock{time_lock};
-        std::tm gtp = *std::gmtime(&t);
-        std::tm ltp = *std::localtime(&t);
-        int64_t gt = std::mktime(&gtp);
-        zone = (t - gt - (ltp.tm_isdst > 0 ? 3600 : 0)) / 3600;
-    };
+    writer() = default;
     ~writer() = default;
     virtual void write(level l, string module_name, string comment, string data) {
         constexpr int SEC_TO_NANO = 1000000000;
+        constexpr int MILL_TO_NANO = 1000000;
         int64_t nano_timestamp = get_nano_timestamp();
-        std::cout << get_datetime(nano_timestamp / SEC_TO_NANO,
-                                  nano_timestamp % SEC_TO_NANO, zone)
+        int64_t sec_stamp = nano_timestamp / SEC_TO_NANO;
+        int64_t precision = nano_timestamp % SEC_TO_NANO;
+        precision /= MILL_TO_NANO;
+        std::lock_guard<std::mutex> lock{time_lock};
+        static char buffer[20];
+        std::tm *ltp = std::localtime(&sec_stamp);
+        std::strftime(buffer, sizeof(buffer), "%F %T", ltp);
+        std::cout << buffer
+                  << "." << std::setw(3) << std::setfill('0') << precision
                   << " " << to_string(l)
                   << " " << module_name
                   << " |%| " << comment
                   << " |%| " << data << std::endl;
     }
 };
-
 } // namespace log2what
 #endif
