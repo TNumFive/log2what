@@ -86,7 +86,14 @@ inline int64_t get_nano_timestamp() {
  * @return false
  */
 inline bool mkdir(string dir_path) {
-    string cmd = "mkdir -p " + dir_path;
+#ifdef __WIN32__
+    string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
+    dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
+#else
+    string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
+#endif
+    cmd.replace(cmd.find("${dir}"), 6, dir_path);
+    cmd.replace(cmd.find("${dir}"), 6, dir_path);
     system(cmd.c_str());
     return true;
 }
