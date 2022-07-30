@@ -11,7 +11,6 @@ namespace log2what {
  *
  */
 class writer {
-  private:
   public:
     writer() = default;
     ~writer() = default;
@@ -22,7 +21,6 @@ class writer {
         int64_t sec_stamp = nano_timestamp / SEC_TO_NANO;
         int64_t precision = nano_timestamp % SEC_TO_NANO;
         precision /= MILL_TO_NANO;
-        std::lock_guard<std::mutex> lock{time_lock};
         static char buffer[20];
         std::tm *ltp = std::localtime(&sec_stamp);
         std::strftime(buffer, sizeof(buffer), "%F %T", ltp);

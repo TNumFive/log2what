@@ -1,5 +1,6 @@
 #ifndef SHELL_HPP
 #define SHELL_HPP
+
 #include "./common.hpp"
 #include "./writer.hpp"
 
@@ -9,8 +10,6 @@ namespace log2what {
  *
  */
 class shell : public writer {
-    using level_t = std::underlying_type_t<level>;
-
   private:
     writer *writer_ptr;
     level mask = level::INFO;
@@ -28,9 +27,9 @@ class shell : public writer {
             delete writer_ptr;
         }
     };
-    virtual void write(level l, string module_name, string comment, string data) {
+    void write(level l, string module_name, string comment, string data) override {
         if (l >= mask) {
-            writer::write(l, module_name, comment, data);
+            writer_ptr->write(l, module_name, comment, data);
         }
     }
 };
