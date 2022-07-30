@@ -8,6 +8,7 @@
 #include <mutex>
 #include <sstream>
 #include <string>
+#include <dirent.h>
 
 namespace log2what {
 using std::string;
@@ -79,13 +80,40 @@ inline int64_t get_nano_timestamp() {
 }
 
 /**
- * @brief create dir by shell cmd
+ * @brief Get the localtime tm object
+ *
+ * @param timestamp_sec
+ * @return std::tm
+ */
+inline std::tm get_localtime_tm(int64_t timestamp_sec) {
+#if defined __USE_POSIX || __GLIBC_USE(ISOC2X)
+    std::tm lt;
+    localtime_r(&timestamp_sec, &lt);
+#elif
+    std::tm lt = *std::localtime(&timestamp_sec);
+#endif
+    return lt;
+}
+
+/**
+ * @brief Get the localtime str of specific unix-stamp
+ *
+ * @param timestamp_sec
+ * @return string like 2022-07-30 11:01:52
+ */
+inline string get_localtime_str(int64_t timestamp_sec) {
+    char buffer[20];
+    std::tm lt = get_localtime_tm(timestamp_sec);
+    std::strftime(buffer, sizeof(buffer), "%F %T", &lt);
+    return buffer;
+}
+
+/**
+ * @brief make dir with cmd
  *
  * @param dir_path
- * @return true
- * @return false
  */
-inline bool mkdir(string dir_path) {
+inline void mkdir(string dir_path) {
 #ifdef __WIN32__
     string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
     dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
@@ -95,7 +123,6 @@ inline bool mkdir(string dir_path) {
     cmd.replace(cmd.find("${dir}"), 6, dir_path);
     cmd.replace(cmd.find("${dir}"), 6, dir_path);
     system(cmd.c_str());
-    return true;
 }
 } // namespace log2what
 #endif

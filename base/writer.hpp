@@ -17,19 +17,10 @@ class writer {
     virtual void write(level l, string module_name, string comment, string data) {
         constexpr int SEC_TO_NANO = 1000000000;
         constexpr int MILL_TO_NANO = 1000000;
-        int64_t nano_timestamp = get_nano_timestamp();
-        int64_t sec_stamp = nano_timestamp / SEC_TO_NANO;
-        int64_t precision = nano_timestamp % SEC_TO_NANO;
-        precision /= MILL_TO_NANO;
-        static char buffer[20];
-#if defined __USE_POSIX || __GLIBC_USE(ISOC2X)
-        std::tm lt;
-        std::tm *ltp = localtime_r(&sec_stamp, &lt);
-#elif
-        std::tm *ltp = std::localtime(&sec_stamp);
-#endif
-        std::strftime(buffer, sizeof(buffer), "%F %T", ltp);
-        std::cout << buffer
+        int64_t timestamp_nano = get_nano_timestamp();
+        int64_t timestamp_sec = timestamp_nano / SEC_TO_NANO;
+        int64_t precision = (timestamp_nano % SEC_TO_NANO) / MILL_TO_NANO;
+        std::cout << get_localtime_str(timestamp_sec)
                   << "." << std::setw(3) << std::setfill('0') << precision
                   << " " << to_string(l)
                   << " " << module_name
