@@ -78,9 +78,6 @@ void file_writer::clean_log_file() {
     while (true) {
         std::unique_lock<std::mutex> lock{cleaner_mutex};
         cleaner_cv.wait(lock);
-        if (file_map.size() == 0) {
-            return;
-        }
         std::lock_guard<std::mutex> m_lock{file_map_mutex};
         std::map<string, std::list<string>> file_list_map;
         for (auto &&fi : file_map) {
@@ -112,14 +109,12 @@ void file_writer::clean_log_file() {
 
 file_writer::file_writer(string file_name, string file_dir, size_t file_size, size_t file_num) {
     string map_key = file_dir + file_name;
-    std::unique_lock<std::mutex> m_lock{file_map_mutex};
+    std::lock_guard<std::mutex> m_lock{file_map_mutex};
     mkdir(file_dir);
     fip = &file_map[map_key];
     if (cleaner == nullptr) {
         cleaner = new std::thread{&file_writer::clean_log_file, this};
     }
-    m_lock.unlock();
-    std::lock_guard<std::mutex> f_lock{fip->file_mutex};
     fip->file_size = file_size;
     fip->file_num = file_num <= 1 ? 1 : file_num;
     fip->writer_num++;
@@ -129,6 +124,7 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
         if (!open_log_file()) {
             throw "open log file failed";
         }
+        cleaner_cv.notify_one();
     }
 }
 
@@ -138,15 +134,12 @@ file_writer::file_writer(file_writer_config &fwc)
 file_writer::~file_writer() {
     string map_key = fip->file_dir + fip->file_name;
     std::lock_guard<std::mutex> m_lock{this->file_map_mutex};
-    std::unique_lock<std::mutex> f_lock{fip->file_mutex};
     fip->writer_num--;
     if (fip->writer_num == 0) {
-        f_lock.unlock();
         file_map.erase(map_key);
     }
     if (file_map.size() == 0) {
-        cleaner_cv.notify_one();
-        cleaner->join();
+        cleaner->detach();
         delete cleaner;
         cleaner = nullptr;
     }
