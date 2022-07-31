@@ -13,7 +13,7 @@ namespace log2what {
 class writer {
   public:
     writer() = default;
-    ~writer() = default;
+    virtual ~writer() = default;
     virtual void write(level l, string module_name, string comment, string data) {
         constexpr int SEC_TO_NANO = 1000000000;
         constexpr int MILL_TO_NANO = 1000000;
