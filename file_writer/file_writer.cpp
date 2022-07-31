@@ -1,6 +1,5 @@
 #include "./file_writer.hpp"
 #include <dirent.h>
-#include <list>
 using namespace log2what;
 
 /**
@@ -8,7 +7,7 @@ using namespace log2what;
  *
  * @param dir_path
  */
-inline void mkdir(string dir_path) {
+inline void log2what::mkdir(string dir_path) {
 #ifdef __WIN32__
     string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
     dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
@@ -28,7 +27,7 @@ static std::mutex dirent_mutex;
  * @param path
  * @return std::list<string>
  */
-inline std::list<string> ls(string path) {
+inline std::list<string> log2what::ls(string path) {
     DIR *dir;
     dirent64 *diread;
     std::lock_guard<std::mutex> lock{dirent_mutex};
@@ -132,6 +131,9 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
         }
     }
 }
+
+file_writer::file_writer(file_writer_config &fwc)
+    : file_writer(fwc.file_name, fwc.file_dir, fwc.file_size, fwc.file_num) {}
 
 file_writer::~file_writer() {
     string map_key = fip->file_dir + fip->file_name;
