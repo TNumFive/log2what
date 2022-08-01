@@ -48,6 +48,8 @@ struct file_writer_config {
 
 class file_writer : public writer {
   private:
+    static bool life_cycle_flag;
+    static std::mutex life_cycle_mutex;
     static std::mutex file_map_mutex;
     static std::map<string, file_info> file_map;
     static std::mutex cleaner_mutex;
