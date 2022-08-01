@@ -62,7 +62,7 @@ class file_writer : public writer {
   public:
     file_writer(string file_name = "root", string file_dir = "./log/", size_t file_size = MB, size_t file_num = 50);
     file_writer(file_writer_config &fwc);
-    virtual ~file_writer() override;
+    ~file_writer() override;
     void write(level l, string module_name, string comment, string data) override;
 };
 } // namespace log2what

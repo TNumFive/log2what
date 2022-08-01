@@ -22,7 +22,7 @@ class shell : public writer {
         this->mask = mask;
         this->writer_ptr = writer_ptr;
     }
-    ~shell() {
+    ~shell() override {
         if (writer_ptr != nullptr) {
             delete writer_ptr;
         }
