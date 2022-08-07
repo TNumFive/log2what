@@ -12,10 +12,7 @@ using std::string;
 class db_writer : public writer {
   private:
     string url;
-    void *db_handle;
-    void *stmt_handle;
-    std::mutex *db_mutex;
-    log2 *logger_ptr;
+    void *db_info_ptr;
 
   public:
     db_writer(string url = "./log/log2.db", writer *writer_ptr = new writer);
