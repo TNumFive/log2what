@@ -106,5 +106,22 @@ inline string get_localtime_str(int64_t timestamp_sec) {
     std::strftime(buffer, sizeof(buffer), "%F %T", &lt);
     return buffer;
 }
+
+/**
+ * @brief make dir with cmd
+ *
+ * @param dir_path
+ */
+inline void mkdir(string dir_path) {
+#ifdef __WIN32__
+    string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
+    dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
+#else
+    string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
+#endif
+    cmd.replace(cmd.find("${dir}"), 6, dir_path);
+    cmd.replace(cmd.find("${dir}"), 6, dir_path);
+    system(cmd.c_str());
+}
 } // namespace log2what
 #endif

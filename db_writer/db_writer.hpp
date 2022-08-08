@@ -1,10 +1,7 @@
 #ifndef DB_WRITER_HPP
 #define DB_WRITER_HPP
 
-#include "../base/common.hpp"
-#include "../base/log2what.hpp"
 #include "../base/writer.hpp"
-#include <mutex>
 
 namespace log2what {
 using std::string;

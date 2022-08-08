@@ -1,27 +1,13 @@
 #include "./db_writer.hpp"
+#include "../base/common.hpp"
+#include "../base/log2what.hpp"
 #include <list>
 #include <map>
+#include <mutex>
 #include <sqlite3.h>
 #include <thread>
 
 using namespace log2what;
-
-/**
- * @brief make dir with cmd
- *
- * @param dir_path
- */
-inline void mkdir(string dir_path) {
-#ifdef __WIN32__
-    string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
-    dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
-#else
-    string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
-#endif
-    cmd.replace(cmd.find("${dir}"), 6, dir_path);
-    cmd.replace(cmd.find("${dir}"), 6, dir_path);
-    system(cmd.c_str());
-}
 
 struct log {
     int64_t timestamp_nano;
