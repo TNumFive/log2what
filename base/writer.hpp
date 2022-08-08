@@ -2,6 +2,7 @@
 #define WRITER_HPP
 
 #include "./common.hpp"
+#include <iomanip>
 #include <iostream>
 #include <string>
 

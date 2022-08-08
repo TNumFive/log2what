@@ -1,23 +1,14 @@
 #include "./file_writer.hpp"
+#include "../base/common.hpp"
+#include <condition_variable>
 #include <dirent.h>
+#include <fstream>
+#include <iomanip>
+#include <list>
+#include <map>
+#include <mutex>
+#include <thread>
 using namespace log2what;
-
-/**
- * @brief make dir with cmd
- *
- * @param dir_path
- */
-inline void log2what::mkdir(string dir_path) {
-#ifdef __WIN32__
-    string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
-    dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
-#else
-    string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
-#endif
-    cmd.replace(cmd.find("${dir}"), 6, dir_path);
-    cmd.replace(cmd.find("${dir}"), 6, dir_path);
-    system(cmd.c_str());
-}
 
 static std::mutex dirent_mutex;
 
@@ -27,7 +18,7 @@ static std::mutex dirent_mutex;
  * @param path
  * @return std::list<string>
  */
-inline std::list<string> log2what::ls(string path) {
+inline std::list<string> ls(string path) {
     DIR *dir;
     dirent64 *diread;
     std::lock_guard<std::mutex> lock{dirent_mutex};
@@ -46,18 +37,29 @@ inline std::list<string> log2what::ls(string path) {
     return {};
 }
 
-bool file_writer::life_cycle_flag{true};
-std::mutex file_writer::life_cycle_mutex;
-std::mutex file_writer::file_map_mutex;
-std::map<string, file_info> file_writer::file_map;
-std::mutex file_writer::cleaner_mutex;
-std::condition_variable file_writer::cleaner_cv;
-std::thread *file_writer::cleaner = nullptr;
+struct file_info {
+    size_t writer_num;
+    std::mutex file_mutex;
+    std::ofstream out;
+    string file_dir;
+    string file_name;
+    size_t file_size;
+    size_t file_num;
+};
+
+bool life_cycle_flag{true};
+std::mutex life_cycle_mutex;
+std::mutex file_map_mutex;
+std::map<string, file_info> file_map;
+std::mutex cleaner_mutex;
+std::condition_variable cleaner_cv;
+std::thread *cleaner = nullptr;
 
 bool file_writer::open_log_file() {
-    string file_path = fip->file_dir + fip->file_name;
-    if (fip->file_size <= 1) {
-        fip->out.open(file_path.append(".log"), std::ios_base::trunc);
+    file_info &info = *(static_cast<file_info *>(file_info_ptr));
+    string file_path = info.file_dir + info.file_name;
+    if (info.file_size <= 1) {
+        info.out.open(file_path.append(".log"), std::ios_base::trunc);
     } else {
         constexpr int SEC_TO_MILLI = 1000;
         char buffer[21];
@@ -66,10 +68,10 @@ bool file_writer::open_log_file() {
         std::strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
         char milli[5];
         sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
-        fip->out.open(file_path.append(".log").append(buffer).append(milli),
+        info.out.open(file_path.append(".log").append(buffer).append(milli),
                       std::ios_base::ate | std::ios::app);
     }
-    return fip->out.is_open();
+    return info.out.is_open();
 }
 
 /**
@@ -119,16 +121,17 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
     life_cycle_flag = true;
     std::lock_guard<std::mutex> m_lock{file_map_mutex};
     mkdir(file_dir);
-    fip = &file_map[map_key];
+    file_info_ptr = &file_map[map_key];
+    file_info &info = file_map[map_key];
     if (cleaner == nullptr) {
         cleaner = new std::thread{&file_writer::clean_log_file, this};
     }
-    fip->file_size = file_size;
-    fip->file_num = file_num <= 1 ? 1 : file_num;
-    fip->writer_num++;
-    if (fip->writer_num == 1) {
-        fip->file_name = file_name;
-        fip->file_dir = file_dir;
+    info.file_size = file_size;
+    info.file_num = file_num <= 1 ? 1 : file_num;
+    info.writer_num++;
+    if (info.writer_num == 1) {
+        info.file_name = file_name;
+        info.file_dir = file_dir;
         if (!open_log_file()) {
             throw "open log file failed";
         }
@@ -136,15 +139,13 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
     }
 }
 
-file_writer::file_writer(file_writer_config &fwc)
-    : file_writer(fwc.file_name, fwc.file_dir, fwc.file_size, fwc.file_num) {}
-
 file_writer::~file_writer() {
-    string map_key = fip->file_dir + fip->file_name;
+    file_info &info = *(static_cast<file_info *>(file_info_ptr));
+    string map_key = info.file_dir + info.file_name;
     std::lock_guard<std::mutex> life_cycle_lock{life_cycle_mutex};
-    std::unique_lock<std::mutex> m_lock{this->file_map_mutex};
-    fip->writer_num--;
-    if (fip->writer_num == 0) {
+    std::unique_lock<std::mutex> m_lock{file_map_mutex};
+    info.writer_num--;
+    if (info.writer_num == 0) {
         file_map.erase(map_key);
     }
     if (file_map.size() == 0) {
@@ -158,14 +159,15 @@ file_writer::~file_writer() {
 }
 
 void file_writer::write(level l, string module_name, string comment, string data) {
-    std::lock_guard<std::mutex> lock{fip->file_mutex};
+    file_info &info = *(static_cast<file_info *>(file_info_ptr));
+    std::lock_guard<std::mutex> lock{info.file_mutex};
     // note: dead_length depens on the format wrote to log
     // like sizeof("2022-07-30 17:02:38.795 TRACE  |%|  |%| \n")
     constexpr int dl = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
     size_t size_to_write = dl + module_name.length() + comment.length() + data.length();
-    if (fip->out.tellp() > fip->file_size - size_to_write) {
+    if (info.out.tellp() > info.file_size - size_to_write) {
         // exceed size, open new log file
-        fip->out.close();
+        info.out.close();
         if (!open_log_file()) {
             throw "open log file failed";
         }
@@ -175,7 +177,7 @@ void file_writer::write(level l, string module_name, string comment, string data
     int64_t timestamp_milli = get_timestamp<std::chrono::milliseconds>();
     int64_t timestamp_sec = timestamp_milli / SEC_TO_MILLI;
     int64_t precision = timestamp_milli % SEC_TO_MILLI;
-    fip->out << get_localtime_str(timestamp_sec)
+    info.out << get_localtime_str(timestamp_sec)
              << "." << std::setw(3) << std::setfill('0') << precision
              << " " << to_string(l)
              << " " << module_name

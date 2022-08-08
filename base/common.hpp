@@ -2,11 +2,6 @@
 #define COMMON_HPP
 
 #include <chrono>
-#include <ctime>
-#include <iomanip>
-#include <iostream>
-#include <mutex>
-#include <sstream>
 #include <string>
 
 namespace log2what {
@@ -43,7 +38,7 @@ inline string to_string(level l) {
     case level::ERROR:
         return "ERROR";
     default:
-        return "LEVEL";
+        return "UNDEFINED";
     }
 }
 
