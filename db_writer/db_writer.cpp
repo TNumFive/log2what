@@ -19,7 +19,7 @@ struct log {
 
 struct db_info {
     string url;
-    size_t counter;
+    size_t writer_num;
     sqlite3 *db_ptr;
     sqlite3_stmt *stmt_ptr;
     std::list<log> log_list;
@@ -107,16 +107,16 @@ int prepare_table_and_stmt(db_info &info) {
 }
 
 db_writer::db_writer(string url, size_t buffer_szie, writer *writer_ptr) {
-    this->url = url;
     std::lock_guard<std::mutex> lock{life_cycle_mutex};
     auto &info = db_map[url];
-    if (info.counter) {
-        info.counter++;
+    if (info.writer_num) {
+        info.writer_num++;
         info.logger_ptr->info("connect to existed db", url);
     } else {
         size_t deli = url.find_last_of('/');
         mkdir(url.substr(0, deli));
-        info.counter = 1;
+        info.url = url;
+        info.writer_num = 1;
         info.logger_ptr = new log2{"log2db", writer_ptr};
         if (SQLITE_OK != sqlite3_open(url.c_str(), &info.db_ptr)) {
             info.logger_ptr->error("open db failed", sqlite3_errmsg(info.db_ptr));
@@ -134,9 +134,9 @@ db_writer::db_writer(string url, size_t buffer_szie, writer *writer_ptr) {
 
 db_writer::~db_writer() {
     std::lock_guard<std::mutex> lock{life_cycle_mutex};
-    auto &info = db_map[url];
-    info.counter--;
-    if (info.counter == 0) {
+    auto &info = *(static_cast<db_info *>(db_info_ptr));
+    info.writer_num--;
+    if (info.writer_num == 0) {
         if (!info.log_list.empty()) {
             flush_log_list();
         }
@@ -146,11 +146,11 @@ db_writer::~db_writer() {
         if (SQLITE_OK != sqlite3_close(info.db_ptr)) {
             info.logger_ptr->error("close db failed", sqlite3_errmsg(info.db_ptr));
         }
-        info.logger_ptr->info("shut db", url);
+        info.logger_ptr->info("shut db", info.url);
         delete info.logger_ptr;
-        db_map.erase(url);
+        db_map.erase(info.url);
     } else {
-        info.logger_ptr->info("shut db_writer", url);
+        info.logger_ptr->info("shut db_writer", info.url);
     }
 }
 

@@ -8,7 +8,6 @@ using std::string;
 
 class db_writer : public writer {
   private:
-    string url;
     void *db_info_ptr;
     void flush_log_list();
 
