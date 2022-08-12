@@ -105,9 +105,7 @@ void file_writer::clean_log_file() {
     while (life_cycle_flag) {
         unique_lock<mutex> cleaner_lock{cleaner_mutex};
         if (life_cycle_flag) {
-            std::cout << "in life cycle" << std::endl;
             cleaner_cv.wait(cleaner_lock);
-            std::cout << "notified" << std::endl;
         }
         if (!life_cycle_flag) {
             return;
@@ -183,9 +181,7 @@ file_writer::~file_writer() {
         unique_lock<mutex> cleaner_lock{cleaner_mutex};
         life_cycle_flag = false;
         cleaner_lock.unlock();
-        std::cout << "life cycle false" << std::endl;
         cleaner_cv.notify_one();
-        std::cout << "notify one" << std::endl;
         cleaner_ptr->join();
         delete cleaner_ptr;
         cleaner_ptr = nullptr;
