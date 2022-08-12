@@ -7,10 +7,23 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include <regex>
 #include <thread>
 using namespace log2what;
+using std::condition_variable;
+using std::ios;
+using std::list;
+using std::lock_guard;
+using std::map;
+using std::mutex;
+using std::ofstream;
+using std::regex;
+using std::regex_match;
+using std::remove;
+using std::thread;
+using std::unique_lock;
 
-static std::mutex dirent_mutex;
+static mutex dirent_mutex;
 
 /**
  * @brief try to mimic the ls cmd
@@ -18,13 +31,13 @@ static std::mutex dirent_mutex;
  * @param path
  * @return std::list<string>
  */
-inline std::list<string> ls(string path) {
+inline list<string> ls(string path) {
     DIR *dir;
     dirent64 *diread;
-    std::lock_guard<std::mutex> lock{dirent_mutex};
+    lock_guard<mutex> lock{dirent_mutex};
     dir = opendir(path.c_str());
     if (dir != nullptr) {
-        std::list<string> file_list;
+        list<string> file_list;
         diread = readdir64(dir);
         while (diread != nullptr) {
             file_list.push_back(diread->d_name);
@@ -38,39 +51,49 @@ inline std::list<string> ls(string path) {
 }
 
 struct file_info {
+    mutex file_mutex;
+    ofstream out;
     size_t writer_num;
-    std::mutex file_mutex;
-    std::ofstream out;
     string file_dir;
     string file_name;
     size_t file_size;
     size_t file_num;
+    regex reg;
 };
 
-bool life_cycle_flag{true};
-std::mutex life_cycle_mutex;
-std::mutex file_map_mutex;
-std::map<string, file_info> file_map;
-std::mutex cleaner_mutex;
-std::condition_variable cleaner_cv;
-std::thread *cleaner = nullptr;
+static mutex life_cycle_mutex;
+static bool life_cycle_flag;
+static mutex file_map_mutex;
+static map<string, file_info> file_info_map;
+static mutex cleaner_mutex;
+static condition_variable cleaner_cv;
+static thread *cleaner_ptr;
 
 bool file_writer::open_log_file() {
-    file_info &info = *(static_cast<file_info *>(file_info_ptr));
-    string file_path = info.file_dir + info.file_name;
-    if (info.file_size <= 1) {
-        info.out.open(file_path.append(".log"), std::ios_base::trunc);
-    } else {
-        constexpr int SEC_TO_MILLI = 1000;
-        char buffer[21];
-        int64_t timestamp_milli = get_timestamp<std::chrono::milliseconds>();
-        std::tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
-        std::strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
-        char milli[5];
-        sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
-        info.out.open(file_path.append(".log").append(buffer).append(milli),
-                      std::ios_base::ate | std::ios::app);
+    auto &info = *(static_cast<file_info *>(file_info_ptr));
+    if (!info.out.is_open()) {
+        // open the log file wrote last time
+        auto file_list = ls(info.file_dir);
+        for (auto it = file_list.rbegin(); it != file_list.rend(); it++) {
+            if (regex_match(*it, info.reg)) {
+                info.out.open(info.file_dir + *it, ios::app);
+                return info.out.is_open();
+            }
+        }
     }
+    if (info.out.is_open()) {
+        info.out.close();
+    }
+    // open new log file
+    constexpr int SEC_TO_MILLI = 1000;
+    char buffer[21];
+    int64_t timestamp_milli = get_timestamp<std::chrono::milliseconds>();
+    std::tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
+    std::strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
+    char milli[5];
+    sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
+    string file_path = info.file_dir + info.file_name;
+    info.out.open(file_path.append(".log").append(buffer).append(milli), ios::app);
     return info.out.is_open();
 }
 
@@ -79,97 +102,105 @@ bool file_writer::open_log_file() {
  *
  */
 void file_writer::clean_log_file() {
-    while (true) {
-        std::unique_lock<std::mutex> lock{cleaner_mutex};
+    while (life_cycle_flag) {
+        unique_lock<mutex> cleaner_lock{cleaner_mutex};
         if (life_cycle_flag) {
-            cleaner_cv.wait(lock);
-        } else {
+            std::cout << "in life cycle" << std::endl;
+            cleaner_cv.wait(cleaner_lock);
+            std::cout << "notified" << std::endl;
+        }
+        if (!life_cycle_flag) {
             return;
         }
-        std::lock_guard<std::mutex> m_lock{file_map_mutex};
-        std::map<string, std::list<string>> file_list_map;
-        for (auto &&fi : file_map) {
-            string &file_dir = fi.second.file_dir;
-            if (file_list_map.count(file_dir) == 0) {
-                file_list_map.emplace(file_dir, ls(file_dir));
+        lock_guard<mutex> file_map_lock{file_map_mutex};
+        map<string, list<string>> file_list_map;
+        for (auto &&i : file_info_map) {
+            auto file_dir = i.second.file_dir;
+            if (!file_list_map.count(file_dir)) {
+                file_list_map.emplace(std::move(file_dir), std::move(ls(file_dir)));
             }
-            auto &file_list = file_list_map[file_dir];
-            size_t file_num = 0;
-            std::list<string>::iterator first = file_list.end();
-            // calculate the nums, record the first one
+            auto &file_list = file_list_map[i.second.file_dir];
+            list<string>::iterator first;
+            size_t count = 0;
             for (auto it = file_list.begin(); it != file_list.end(); it++) {
-                if (it->find(fi.second.file_name) != string::npos) {
-                    file_num++;
-                    if (first == file_list.end()) {
+                if (regex_match(*it, i.second.reg)) {
+                    if (!count) {
                         first = it;
+                    }
+                    count++;
+                } else {
+                    if (count) {
+                        break;
                     }
                 }
             }
-            while (file_num > fi.second.file_num) {
-                string file_to_del = fi.second.file_dir + (*first);
-                remove(file_to_del.c_str());
+            while (count > i.second.file_num) {
+                string file_path = i.second.file_dir + *first;
+                remove(file_path.c_str());
                 first = file_list.erase(first);
-                file_num--;
+                count--;
             }
         }
     }
 }
 
 file_writer::file_writer(string file_name, string file_dir, size_t file_size, size_t file_num) {
+    const char regex_suffix[] = R"(\.log\.[0-9]{8}_[0-9]{6}_[0-9]{3})";
     string map_key = file_dir + file_name;
-    std::lock_guard<std::mutex> life_cycle_lock{life_cycle_mutex};
-    life_cycle_flag = true;
-    std::lock_guard<std::mutex> m_lock{file_map_mutex};
-    mkdir(file_dir);
-    file_info_ptr = &file_map[map_key];
-    file_info &info = file_map[map_key];
-    if (cleaner == nullptr) {
-        cleaner = new std::thread{&file_writer::clean_log_file, this};
+    lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
+    if (cleaner_ptr == nullptr) {
+        cleaner_ptr = new thread{&file_writer::clean_log_file, this};
     }
-    info.file_size = file_size;
-    info.file_num = file_num <= 1 ? 1 : file_num;
-    info.writer_num++;
-    if (info.writer_num == 1) {
-        info.file_name = file_name;
+    lock_guard<mutex> file_map_lock{file_map_mutex};
+    life_cycle_flag = true;
+    auto &info = file_info_map[map_key];
+    file_info_ptr = &info;
+    if (info.writer_num == 0) {
+        mkdir(file_dir);
         info.file_dir = file_dir;
-        if (!open_log_file()) {
-            throw "open log file failed";
-        }
+        info.file_name = file_name;
+        string reg_str = file_name + regex_suffix;
+        info.reg = regex{reg_str};
+        open_log_file();
         cleaner_cv.notify_one();
     }
+    info.file_size = file_size > 1 ? file_size : 1;
+    info.file_num = file_num;
+    info.writer_num++;
 }
 
 file_writer::~file_writer() {
-    file_info &info = *(static_cast<file_info *>(file_info_ptr));
-    string map_key = info.file_dir + info.file_name;
-    std::lock_guard<std::mutex> life_cycle_lock{life_cycle_mutex};
-    std::unique_lock<std::mutex> m_lock{file_map_mutex};
+    auto &info = *(static_cast<file_info *>(file_info_ptr));
+    lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
+    unique_lock<mutex> file_map_lock{file_map_mutex};
     info.writer_num--;
     if (info.writer_num == 0) {
-        file_map.erase(map_key);
+        string map_key = info.file_dir + info.file_name;
+        file_info_map.erase(map_key);
     }
-    if (file_map.size() == 0) {
+    file_map_lock.unlock();
+    if (file_info_map.empty()) {
+        unique_lock<mutex> cleaner_lock{cleaner_mutex};
         life_cycle_flag = false;
-        m_lock.unlock();
+        cleaner_lock.unlock();
+        std::cout << "life cycle false" << std::endl;
         cleaner_cv.notify_one();
-        cleaner->join();
-        delete cleaner;
-        cleaner = nullptr;
+        std::cout << "notify one" << std::endl;
+        cleaner_ptr->join();
+        delete cleaner_ptr;
+        cleaner_ptr = nullptr;
     }
 }
 
 void file_writer::write(level l, string module_name, string comment, string data) {
-    file_info &info = *(static_cast<file_info *>(file_info_ptr));
+    auto &info = *(static_cast<file_info *>(file_info_ptr));
     std::lock_guard<std::mutex> lock{info.file_mutex};
-    // note: dead_length depens on the format wrote to log
-    // like sizeof("2022-07-30 17:02:38.795 TRACE  |%|  |%| \n")
-    constexpr int dl = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
-    size_t size_to_write = dl + module_name.length() + comment.length() + data.length();
+    constexpr int fixed_log_length = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
+    size_t size_to_write = fixed_log_length + module_name.length() + comment.length() + data.length();
     if (info.out.tellp() > info.file_size - size_to_write) {
         // exceed size, open new log file
-        info.out.close();
         if (!open_log_file()) {
-            throw "open log file failed";
+            return;
         }
         cleaner_cv.notify_one();
     }
