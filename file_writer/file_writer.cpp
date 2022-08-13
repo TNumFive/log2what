@@ -58,7 +58,7 @@ struct file_info {
     string file_name;
     size_t file_size;
     size_t file_num;
-    regex reg;
+    regex pattern;
 };
 
 static mutex life_cycle_mutex;
@@ -68,6 +68,8 @@ static map<string, file_info> file_info_map;
 static mutex cleaner_mutex;
 static condition_variable cleaner_cv;
 static thread *cleaner_ptr;
+constexpr char regex_suffix[] = R"(\.log\.[0-9]{8}_[0-9]{6}_[0-9]{3}$)";
+constexpr char file_name_deli[] = ".log.";
 
 bool file_writer::open_log_file() {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
@@ -75,7 +77,7 @@ bool file_writer::open_log_file() {
         // open the log file wrote last time
         auto file_list = ls(info.file_dir);
         for (auto it = file_list.rbegin(); it != file_list.rend(); it++) {
-            if (regex_match(*it, info.reg)) {
+            if (regex_match(*it, info.pattern)) {
                 info.out.open(info.file_dir + *it, ios::app);
                 return info.out.is_open();
             }
@@ -102,6 +104,7 @@ bool file_writer::open_log_file() {
  *
  */
 void file_writer::clean_log_file() {
+    regex pattern{regex_suffix};
     while (life_cycle_flag) {
         unique_lock<mutex> cleaner_lock{cleaner_mutex};
         if (life_cycle_flag) {
@@ -111,39 +114,32 @@ void file_writer::clean_log_file() {
             return;
         }
         lock_guard<mutex> file_map_lock{file_map_mutex};
-        map<string, list<string>> file_list_map;
+        // map<file_dir,map<file_name,list<file>>>
+        map<string, map<string, list<string>>> dir_file_list_map;
         for (auto &&i : file_info_map) {
-            auto file_dir = i.second.file_dir;
-            if (!file_list_map.count(file_dir)) {
-                file_list_map.emplace(std::move(file_dir), std::move(ls(file_dir)));
-            }
-            auto &file_list = file_list_map[i.second.file_dir];
-            list<string>::iterator first;
-            size_t count = 0;
-            for (auto it = file_list.begin(); it != file_list.end(); it++) {
-                if (regex_match(*it, i.second.reg)) {
-                    if (!count) {
-                        first = it;
-                    }
-                    count++;
-                } else {
-                    if (count) {
-                        break;
+            auto &file_dir = i.second.file_dir;
+            if (!dir_file_list_map.count(file_dir)) {
+                auto &file_list_map = dir_file_list_map[file_dir];
+                auto file_list = ls(file_dir);
+                for (auto &&file : file_list) {
+                    auto deli_pos = file.find(file_name_deli);
+                    if (deli_pos != string::npos && regex_match(&(file.c_str()[deli_pos]), pattern)) {
+                        string file_name = file.substr(0, deli_pos);
+                        file_list_map[file_name].push_back(file);
                     }
                 }
             }
-            while (count > i.second.file_num) {
-                string file_path = i.second.file_dir + *first;
+            auto &file_list = dir_file_list_map[file_dir][i.second.file_name];
+            while (file_list.size() > i.second.file_num) {
+                string file_path{file_dir + file_list.front()};
                 remove(file_path.c_str());
-                first = file_list.erase(first);
-                count--;
+                file_list.pop_front();
             }
         }
     }
 }
 
 file_writer::file_writer(string file_name, string file_dir, size_t file_size, size_t file_num) {
-    const char regex_suffix[] = R"(\.log\.[0-9]{8}_[0-9]{6}_[0-9]{3})";
     string map_key = file_dir + file_name;
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     if (cleaner_ptr == nullptr) {
@@ -157,8 +153,7 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
         mkdir(file_dir);
         info.file_dir = file_dir;
         info.file_name = file_name;
-        string reg_str = file_name + regex_suffix;
-        info.reg = regex{reg_str};
+        info.pattern = regex{file_name + regex_suffix};
         open_log_file();
         cleaner_cv.notify_one();
     }
