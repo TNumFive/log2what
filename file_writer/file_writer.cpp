@@ -56,24 +56,21 @@ static map<string, file_info> file_info_map;
 static mutex cleaner_mutex;
 static condition_variable cleaner_cv;
 static thread *cleaner_ptr;
-constexpr char file_name_deli[] = ".log.";
+constexpr char file_name_deli[] = ".log";
 
 /**
- * @brief append log file suffix to file_path
+ * @brief gen log file suffix
  *
- * @param file_path file_dir+file_name
- * @return string& file_dir+file_name+file_name_deli+time_str
+ * @return string like .20220814_105832_204
  */
-inline string &append_log_file_suffix(string &file_path) {
+inline string gen_log_file_suffix() {
     constexpr int SEC_TO_MILLI = 1000;
     char buffer[21];
     int64_t timestamp_milli = get_timestamp<milliseconds>();
     tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
-    strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &lt);
-    char milli[5];
-    sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
-    file_path.append(file_name_deli).append(buffer).append(milli);
-    return file_path;
+    strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
+    sprintf(&buffer[16], "_%03ld", timestamp_milli % SEC_TO_MILLI);
+    return buffer;
 }
 
 /**
@@ -128,7 +125,7 @@ bool file_writer::open_log_file() {
     }
     // open new log file
     string file_path = info.file_dir + info.file_name;
-    info.out.open(append_log_file_suffix(file_path), ios::app);
+    info.out.open(file_path.append(file_name_deli).append(gen_log_file_suffix()), ios::app);
     return info.out.is_open();
 }
 
