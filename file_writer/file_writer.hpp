@@ -14,7 +14,7 @@ class file_writer : public writer {
     virtual void clean_log_file();
 
   public:
-    file_writer(string file_name = "root", string file_dir = "./log/", size_t file_size = MB, size_t file_num = 50);
+    file_writer(const string &file_name = "root", const string &file_dir = "./log/", size_t file_size = MB, size_t file_num = 50);
     ~file_writer() override;
     void write(level l, string module_name, string comment, string data) override;
 };

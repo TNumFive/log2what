@@ -7,21 +7,10 @@
 #include <list>
 #include <map>
 #include <mutex>
-#include <regex>
 #include <thread>
 using namespace log2what;
-using std::condition_variable;
-using std::ios;
-using std::list;
-using std::lock_guard;
-using std::map;
-using std::mutex;
-using std::ofstream;
-using std::regex;
-using std::regex_match;
-using std::remove;
-using std::thread;
-using std::unique_lock;
+using namespace std;
+using std::chrono::milliseconds;
 
 static mutex dirent_mutex;
 
@@ -29,9 +18,9 @@ static mutex dirent_mutex;
  * @brief try to mimic the ls cmd
  *
  * @param path
- * @return std::list<string>
+ * @return list<string>
  */
-inline list<string> ls(string path) {
+inline list<string> ls(const string &path) {
     DIR *dir;
     dirent64 *diread;
     lock_guard<mutex> lock{dirent_mutex};
@@ -58,7 +47,6 @@ struct file_info {
     string file_name;
     size_t file_size;
     size_t file_num;
-    regex pattern;
 };
 
 static mutex life_cycle_mutex;
@@ -68,8 +56,60 @@ static map<string, file_info> file_info_map;
 static mutex cleaner_mutex;
 static condition_variable cleaner_cv;
 static thread *cleaner_ptr;
-constexpr char regex_suffix[] = R"(\.log\.[0-9]{8}_[0-9]{6}_[0-9]{3}$)";
 constexpr char file_name_deli[] = ".log.";
+
+/**
+ * @brief append log file suffix to file_path
+ *
+ * @param file_path file_dir+file_name
+ * @return string& file_dir+file_name+file_name_deli+time_str
+ */
+inline string &append_log_file_suffix(string &file_path) {
+    constexpr int SEC_TO_MILLI = 1000;
+    char buffer[21];
+    int64_t timestamp_milli = get_timestamp<milliseconds>();
+    tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
+    strftime(buffer, sizeof(buffer), "%Y%m%d_%H%M%S", &lt);
+    char milli[5];
+    sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
+    file_path.append(file_name_deli).append(buffer).append(milli);
+    return file_path;
+}
+
+/**
+ * @brief hard-code log_file name format check fn
+ *
+ * @param file
+ * @return true
+ * @return false
+ */
+inline bool is_log_file(const char *file_suffix) {
+    constexpr char low[] = ".log.00000000_000000_000";
+    constexpr char top[] = ".log.99991939_295959_999";
+    for (size_t i = 0; i < sizeof(low); i++) {
+        if (file_suffix[i] < low[i] || file_suffix[i] > top[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief hard-code log_file name format check fn
+ *
+ * @param file
+ * @return true
+ * @return false
+ */
+inline bool is_log_file(const string &name, const string &file) {
+    size_t size = name.size();
+    for (size_t i = 0; i < size; i++) {
+        if (name[i] != file[i]) {
+            return false;
+        }
+    }
+    return is_log_file(&(file.c_str()[size]));
+}
 
 bool file_writer::open_log_file() {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
@@ -77,7 +117,7 @@ bool file_writer::open_log_file() {
         // open the log file wrote last time
         auto file_list = ls(info.file_dir);
         for (auto it = file_list.rbegin(); it != file_list.rend(); it++) {
-            if (regex_match(*it, info.pattern)) {
+            if (is_log_file(info.file_name, *it)) {
                 info.out.open(info.file_dir + *it, ios::app);
                 return info.out.is_open();
             }
@@ -87,15 +127,8 @@ bool file_writer::open_log_file() {
         info.out.close();
     }
     // open new log file
-    constexpr int SEC_TO_MILLI = 1000;
-    char buffer[21];
-    int64_t timestamp_milli = get_timestamp<std::chrono::milliseconds>();
-    std::tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
-    std::strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
-    char milli[5];
-    sprintf(milli, "_%03ld", timestamp_milli % SEC_TO_MILLI);
     string file_path = info.file_dir + info.file_name;
-    info.out.open(file_path.append(".log").append(buffer).append(milli), ios::app);
+    info.out.open(append_log_file_suffix(file_path), ios::app);
     return info.out.is_open();
 }
 
@@ -104,7 +137,6 @@ bool file_writer::open_log_file() {
  *
  */
 void file_writer::clean_log_file() {
-    regex pattern{regex_suffix};
     while (life_cycle_flag) {
         unique_lock<mutex> cleaner_lock{cleaner_mutex};
         if (life_cycle_flag) {
@@ -123,7 +155,7 @@ void file_writer::clean_log_file() {
                 auto file_list = ls(file_dir);
                 for (auto &&file : file_list) {
                     auto deli_pos = file.find(file_name_deli);
-                    if (deli_pos != string::npos && regex_match(&(file.c_str()[deli_pos]), pattern)) {
+                    if (deli_pos != string::npos && is_log_file(&(file.c_str()[deli_pos]))) {
                         string file_name = file.substr(0, deli_pos);
                         file_list_map[file_name].push_back(file);
                     }
@@ -139,7 +171,7 @@ void file_writer::clean_log_file() {
     }
 }
 
-file_writer::file_writer(string file_name, string file_dir, size_t file_size, size_t file_num) {
+file_writer::file_writer(const string &file_name, const string &file_dir, size_t file_size, size_t file_num) {
     string map_key = file_dir + file_name;
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     if (cleaner_ptr == nullptr) {
@@ -153,7 +185,6 @@ file_writer::file_writer(string file_name, string file_dir, size_t file_size, si
         mkdir(file_dir);
         info.file_dir = file_dir;
         info.file_name = file_name;
-        info.pattern = regex{file_name + regex_suffix};
         open_log_file();
         cleaner_cv.notify_one();
     }
@@ -185,7 +216,7 @@ file_writer::~file_writer() {
 
 void file_writer::write(level l, string module_name, string comment, string data) {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
-    std::lock_guard<std::mutex> lock{info.file_mutex};
+    lock_guard<mutex> lock{info.file_mutex};
     constexpr int fixed_log_length = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
     size_t size_to_write = fixed_log_length + module_name.length() + comment.length() + data.length();
     if (info.out.tellp() > info.file_size - size_to_write) {
@@ -196,13 +227,13 @@ void file_writer::write(level l, string module_name, string comment, string data
         cleaner_cv.notify_one();
     }
     constexpr int SEC_TO_MILLI = 1000;
-    int64_t timestamp_milli = get_timestamp<std::chrono::milliseconds>();
+    int64_t timestamp_milli = get_timestamp<milliseconds>();
     int64_t timestamp_sec = timestamp_milli / SEC_TO_MILLI;
     int64_t precision = timestamp_milli % SEC_TO_MILLI;
     info.out << get_localtime_str(timestamp_sec)
-             << "." << std::setw(3) << std::setfill('0') << precision
+             << "." << setw(3) << setfill('0') << precision
              << " " << to_string(l)
              << " " << module_name
              << " |%| " << comment
-             << " |%| " << data << std::endl;
+             << " |%| " << data << "\n";
 }

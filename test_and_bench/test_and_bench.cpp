@@ -7,7 +7,6 @@
 #include <map>
 #include <mutex>
 #include <random>
-#include <regex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -21,18 +20,21 @@ using log2what::level;
 using log2what::shell;
 using std::fstream;
 using std::list;
+using std::lock_guard;
 using std::map;
-using std::regex;
-using std::regex_match;
+using std::mutex;
 using std::string;
+using std::stringstream;
 using std::thread;
 using std::to_string;
+using std::unique_lock;
 
-static log2std logger{"benchmark", new shell{level::INFO, new writer}};
+// declare first for later use in bench and test functions
+extern log2std logger;
 
 void sync_cout(string comment, string data) {
-    static std::mutex cout_mutex;
-    std::lock_guard<std::mutex> lock{cout_mutex};
+    static mutex cout_mutex;
+    lock_guard<mutex> lock{cout_mutex};
     logger.debug(comment, data);
 }
 
@@ -55,7 +57,7 @@ void benchmark_thread() {
  * @brief try to mimic the ls cmd
  *
  * @param path
- * @return std::list<string>
+ * @return  list<string>
  */
 inline list<string> ls(string path) {
     DIR *dir;
@@ -99,11 +101,11 @@ void benchmark_mkdir() {
 }
 
 void benchmark_lock() {
-    std::mutex test;
+    mutex test;
     logger.info("start test", "lock and unlock 1000 times");
     auto start = get_nano_timestamp();
     for (size_t i = 0; i < 1000; i++) {
-        std::unique_lock<std::mutex> lock{test};
+        unique_lock<mutex> lock{test};
     }
     auto end = get_nano_timestamp();
     auto time_consumed = (end - start);
@@ -115,7 +117,7 @@ void benchmark_file() {
     mkdir("./benchmark/");
     map<string, fstream> file_map;
     for (size_t i = 0; i < 1000; i++) {
-        std::stringstream ss;
+        stringstream ss;
         ss << "./benchmark/" << to_string(i) << ".log";
         file_map[ss.str()];
     }
@@ -167,7 +169,7 @@ void random_log_writer(string name, int log_num) {
         for (size_t i = 0; i < logger_num; i++) {
             logger_vector.push_back(
                 new log2std{name + "_" + to_string(i),
-                            new file_writer{name, "./log/", log2what::MB, 50}});
+                            new file_writer{name, "./log/", log2what::MB, 5}});
         }
         // write random nums of log
         int cycle_to_write = random_int(1, 100);
@@ -186,18 +188,22 @@ void random_log_writer(string name, int log_num) {
     }
 }
 
+log2std logger{"benchmark", new shell{level::INFO, new writer}};
+
 int main(int argc, char const *argv[]) {
-    logger.info("start mutlti thread writer test", "");
-    auto start = get_nano_timestamp();
-    thread t1{random_log_writer, "thread1", 250000};
-    thread t2{random_log_writer, "thread2", 250000};
-    thread t3{random_log_writer, "thread3", 250000};
-    thread t4{random_log_writer, "thread4", 250000};
-    t1.join();
-    t2.join();
-    t3.join();
-    t4.join();
-    auto end = get_nano_timestamp();
-    logger.info("end test", to_string((end - start) / 1e6) + "ms");
+    for (size_t i = 0; i < 10; i++) {
+        logger.info("start mutlti thread writer test", "");
+        auto start = get_nano_timestamp();
+        thread t1{random_log_writer, "thread1", 250000};
+        thread t2{random_log_writer, "thread2", 250000};
+        thread t3{random_log_writer, "thread3", 250000};
+        thread t4{random_log_writer, "thread4", 250000};
+        t1.join();
+        t2.join();
+        t3.join();
+        t4.join();
+        auto end = get_nano_timestamp();
+        logger.info("end test", to_string((end - start) / 1e6) + "ms");
+    }
     return 0;
 }
