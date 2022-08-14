@@ -141,6 +141,26 @@ void benchmark_file() {
     // about 0.005ms per file
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
+    logger.info("start test", "over write 1000 existing files");
+    start = get_nano_timestamp();
+    for (auto &&i : file_map) {
+        i.second.open(i.first, std::ios::trunc);
+    }
+    end = get_nano_timestamp();
+    time_consumed = (end - start);
+    // about 0.0001ms per file
+    logger.info("end test", to_string(time_consumed / 1e6) + "ms");
+
+    logger.info("start test", "close 1000 existed files");
+    start = get_nano_timestamp();
+    for (auto &&i : file_map) {
+        i.second.close();
+    }
+    end = get_nano_timestamp();
+    time_consumed = (end - start);
+    // about 0.00005ms per file
+    logger.info("end test", to_string(time_consumed / 1e6) + "ms");
+
     logger.info("start test", "remove 1000 files");
     start = get_nano_timestamp();
     for (auto &&i : file_map) {
@@ -191,7 +211,8 @@ void random_log_writer(string name, int log_num) {
 log2std logger{"benchmark", new shell{level::INFO, new writer}};
 
 int main(int argc, char const *argv[]) {
-    for (size_t i = 0; i < 10; i++) {
+    benchmark_file();
+    for (size_t i = 0; i < 1; i++) {
         logger.info("start mutlti thread writer test", "");
         auto start = get_nano_timestamp();
         thread t1{random_log_writer, "thread1", 250000};

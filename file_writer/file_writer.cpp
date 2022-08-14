@@ -120,9 +120,7 @@ bool file_writer::open_log_file() {
             }
         }
     }
-    if (info.out.is_open()) {
-        info.out.close();
-    }
+    info.out.close();
     // open new log file
     string file_path = info.file_dir + info.file_name;
     info.out.open(file_path.append(file_name_deli).append(gen_log_file_suffix()), ios::app);
@@ -193,13 +191,12 @@ file_writer::file_writer(const string &file_name, const string &file_dir, size_t
 file_writer::~file_writer() {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
-    unique_lock<mutex> file_map_lock{file_map_mutex};
     info.writer_num--;
     if (info.writer_num == 0) {
         string map_key = info.file_dir + info.file_name;
+        lock_guard<mutex> file_map_lock{file_map_mutex};
         file_info_map.erase(map_key);
     }
-    file_map_lock.unlock();
     if (file_info_map.empty()) {
         unique_lock<mutex> cleaner_lock{cleaner_mutex};
         life_cycle_flag = false;
