@@ -14,9 +14,9 @@ class file_writer : public writer {
     virtual void clean_log_file();
 
   public:
-    file_writer(const string &file_name = "root", const string &file_dir = "./log/", size_t file_size = MB, size_t file_num = 50);
+    file_writer(const string &file_name = "root", const string &file_dir = "./log/", const size_t file_size = MB, const size_t file_num = 50);
     ~file_writer() override;
-    void write(level l, string module_name, string comment, string data) override;
+    void write(const level l, const string &module_name, const string &comment, const string &data) override;
 };
 } // namespace log2what
 

@@ -25,7 +25,7 @@ enum class level : int {
  * @param l enum level
  * @return string
  */
-inline string to_string(level l) {
+inline string to_string(const level l) {
     switch (l) {
     case level::TRACE:
         return "TRACE";
@@ -48,7 +48,7 @@ inline string to_string(level l) {
  * @param s result string
  * @param l input level
  */
-inline void to_string(string &s, level l) {
+inline void to_string(string &s, const level l) {
     s = to_string(l);
 }
 
@@ -79,7 +79,7 @@ inline int64_t get_nano_timestamp() {
  * @param timestamp_sec
  * @return std::tm
  */
-inline std::tm get_localtime_tm(int64_t timestamp_sec) {
+inline std::tm get_localtime_tm(const int64_t timestamp_sec) {
 #if defined __USE_POSIX || __GLIBC_USE(ISOC2X)
     std::tm lt;
     localtime_r(&timestamp_sec, &lt);
@@ -95,7 +95,7 @@ inline std::tm get_localtime_tm(int64_t timestamp_sec) {
  * @param timestamp_sec
  * @return string like 2022-07-30 11:01:52
  */
-inline string get_localtime_str(int64_t timestamp_sec) {
+inline string get_localtime_str(const int64_t timestamp_sec) {
     char buffer[20];
     std::tm lt = get_localtime_tm(timestamp_sec);
     std::strftime(buffer, sizeof(buffer), "%F %T", &lt);
@@ -107,10 +107,9 @@ inline string get_localtime_str(int64_t timestamp_sec) {
  *
  * @param dir_path
  */
-inline void mkdir(string dir_path) {
+inline void mkdir(const string &dir_path) {
 #ifdef __WIN32__
     string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
-    dir_path.replace(dir_path.begin(), dir_path.end(), '/', '\\');
 #else
     string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
 #endif

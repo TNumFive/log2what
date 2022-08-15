@@ -106,7 +106,7 @@ int prepare_table_and_stmt(db_info &info) {
     return SQLITE_OK;
 }
 
-db_writer::db_writer(string url, size_t buffer_szie, writer *writer_ptr) {
+db_writer::db_writer(const string &url, const size_t buffer_szie, writer *writer_ptr) {
     std::lock_guard<std::mutex> lock{life_cycle_mutex};
     auto &info = db_map[url];
     if (info.writer_num) {
@@ -154,7 +154,7 @@ db_writer::~db_writer() {
     }
 }
 
-void db_writer::write(level l, string module_name, string comment, string data) {
+void db_writer::write(const level l, const string &module_name, const string &comment, const string &data) {
     db_info &info = *(static_cast<db_info *>(db_info_ptr));
     std::lock_guard<std::mutex> lock{info.db_mutex};
     log temp{.timestamp_nano = get_nano_timestamp(),

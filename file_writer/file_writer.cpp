@@ -166,7 +166,7 @@ void file_writer::clean_log_file() {
     }
 }
 
-file_writer::file_writer(const string &file_name, const string &file_dir, size_t file_size, size_t file_num) {
+file_writer::file_writer(const string &file_name, const string &file_dir, const size_t file_size, const size_t file_num) {
     string map_key = file_dir + file_name;
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     if (cleaner_ptr == nullptr) {
@@ -208,7 +208,7 @@ file_writer::~file_writer() {
     }
 }
 
-void file_writer::write(level l, string module_name, string comment, string data) {
+void file_writer::write(const level l, const string &module_name, const string &comment, const string &data) {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
     lock_guard<mutex> lock{info.file_mutex};
     constexpr int fixed_log_length = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");

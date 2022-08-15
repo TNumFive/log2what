@@ -15,7 +15,7 @@ class writer {
   public:
     writer() = default;
     virtual ~writer() = default;
-    virtual void write(level l, string module_name, string comment, string data) {
+    virtual void write(const level l, const string &module_name, const string &comment, const string &data) {
         constexpr int SEC_TO_NANO = 1000000000;
         constexpr int MILL_TO_NANO = 1000000;
         int64_t timestamp_nano = get_nano_timestamp();

@@ -18,7 +18,7 @@ class shell : public writer {
     shell(writer *writer_ptr = new writer) {
         this->writer_ptr = writer_ptr;
     };
-    shell(level mask, writer *writer_ptr = new writer) {
+    shell(const level mask, writer *writer_ptr = new writer) {
         this->mask = mask;
         this->writer_ptr = writer_ptr;
     }
@@ -27,7 +27,7 @@ class shell : public writer {
             delete writer_ptr;
         }
     };
-    void write(level l, string module_name, string comment, string data) override {
+    void write(const level l, const string &module_name, const string &comment, const string &data) override {
         if (l >= mask) {
             writer_ptr->write(l, module_name, comment, data);
         }
