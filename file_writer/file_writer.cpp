@@ -123,7 +123,10 @@ bool file_writer::open_log_file() {
     info.out.close();
     // open new log file
     string file_path = info.file_dir + info.file_name;
-    info.out.open(file_path.append(file_name_deli).append(gen_log_file_suffix()), ios::app);
+    file_path.append(file_name_deli).append(gen_log_file_suffix());
+    unique_lock<mutex> lock{dirent_mutex};
+    info.out.open(file_path, ios::app);
+    lock.unlock();
     return info.out.is_open();
 }
 
