@@ -14,6 +14,10 @@ class file_writer : public writer {
 
   public:
     file_writer(const string &file_name = "root", const string &file_dir = "./log/", const size_t file_size = MB, const size_t file_num = 50);
+    file_writer(const file_writer &other) = delete;
+    file_writer(file_writer &&other) = delete;
+    file_writer &operator=(const file_writer &other) = delete;
+    file_writer &operator=(file_writer &&other) = delete;
     ~file_writer() override;
     void write(const level l, const string &module_name, const string &comment, const string &data) override;
 };
