@@ -11,7 +11,6 @@ class file_writer : public writer {
   private:
     void *file_info_ptr;
     virtual bool open_log_file();
-    virtual void clean_log_file();
 
   public:
     file_writer(const string &file_name = "root", const string &file_dir = "./log/", const size_t file_size = MB, const size_t file_num = 50);
