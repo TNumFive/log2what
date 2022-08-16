@@ -14,6 +14,10 @@ namespace log2what {
 class writer {
   public:
     writer() = default;
+    writer(const writer &other) = delete;
+    writer(writer &&other) = delete;
+    writer &operator=(const writer &other) = delete;
+    writer &operator=(writer &&other) = delete;
     virtual ~writer() = default;
     virtual void write(const level l, const string &module_name, const string &comment, const string &data) {
         constexpr int SEC_TO_NANO = 1000000000;

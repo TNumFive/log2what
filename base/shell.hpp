@@ -22,6 +22,10 @@ class shell : public writer {
         this->mask = mask;
         this->writer_ptr = writer_ptr;
     }
+    shell(const shell &other) = delete;
+    shell(shell &&other) = delete;
+    shell &operator=(const shell &other) = delete;
+    shell &operator=(shell &&other) = delete;
     ~shell() override {
         if (writer_ptr != nullptr) {
             delete writer_ptr;
