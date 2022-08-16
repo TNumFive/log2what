@@ -37,6 +37,8 @@ class log2 {
             this->writer_ptr = nullptr;
         }
     }
+    // virtual log2 *clone() { return new log2{}; };
+    // virtual void swap(log2 &){};
     virtual void trace(const string &comment = "", const string &data = "") {
         writer_ptr->write(level::TRACE, module_name, comment, data);
     }
