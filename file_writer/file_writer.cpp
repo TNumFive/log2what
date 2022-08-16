@@ -1,5 +1,5 @@
-#include "../base/common.hpp"
 #include "./file_writer.hpp"
+#include "../base/common.hpp"
 #include <condition_variable>
 #include <dirent.h>
 #include <fstream>
@@ -21,6 +21,7 @@ struct file_info {
     string file_name;
     size_t file_size;
     size_t file_num;
+    string map_key;
 };
 
 static mutex life_cycle_mutex;
@@ -107,7 +108,7 @@ bool file_writer::open_log_file() {
     }
     info.out.close();
     // open new log file
-    string new_path = info.file_dir + info.file_name;
+    string new_path = info.map_key;
     new_path.append(file_name_deli).append(gen_log_file_suffix());
     if (file_set.size() < info.file_num) {
         info.out.open(new_path, ios::app);
@@ -138,6 +139,7 @@ file_writer::file_writer(const string &file_name, const string &file_dir, const 
     if (!info.out.is_open()) {
         info.file_dir = file_dir;
         info.file_name = file_name;
+        info.map_key = std::move(map_key);
         mkdir(file_dir);
         open_log_file();
     }
