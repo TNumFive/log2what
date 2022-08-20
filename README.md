@@ -49,14 +49,14 @@ class shell : public writer {
 可以参考**测试**中的`test_and_script/test_and_bench.cpp`和`build.sh`
 ```cpp
 // 初始化一个向文件写入log的简单logger
-auto sim_logger = log2{"root", new file_writer};
+log2 sim_logger{"root", new file_writer};
 // 初始化一个，
 // 控制台输出info及以上level的log、
 // 将全量log写入文件的、
 // 将log信息记录到数据库的
 // logger
-auto multi_logger = log2lots()
-    .append_writer(new shell{new writer})
+log2lots multi_logger{};
+multi_logger.append_writer(new shell{new writer})
     .append_writer(new file_writer)
     .append_writer(new db_writer);
 ```

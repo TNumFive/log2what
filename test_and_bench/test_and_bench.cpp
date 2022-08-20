@@ -1,5 +1,6 @@
 #include "../base/log2what.hpp"
 #include "../base/shell.hpp"
+#include "../db_writer/db_writer.hpp"
 #include "../file_writer/file_writer.hpp"
 #include <dirent.h>
 #include <fstream>
@@ -16,7 +17,9 @@ using log2std = log2what::log2;
 using log2what::mkdir;
 using writer = log2what::writer;
 using file_writer = log2what::file_writer;
+using db_writer = log2what::db_writer;
 using log2what::level;
+using log2what::MB;
 using log2what::shell;
 using std::fstream;
 using std::list;
@@ -86,7 +89,7 @@ void benchmark_mkdir() {
     }
     auto end = get_nano_timestamp();
     auto time_consumed = (end - start);
-    // about 1.5ms one dir
+    // 1415.521004ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
     logger.info("start test", "read dir with 1000-files 1000 times");
@@ -96,7 +99,7 @@ void benchmark_mkdir() {
     }
     end = get_nano_timestamp();
     time_consumed = (end - start);
-    // about 1.035ms one dir
+    // 1100.123631ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 }
 
@@ -128,7 +131,7 @@ void benchmark_file() {
     }
     auto end = get_nano_timestamp();
     auto time_consumed = (end - start);
-    // about 0.015ms per file
+    // 24.558695ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
     logger.info("start test", "close 1000 files");
@@ -138,17 +141,27 @@ void benchmark_file() {
     }
     end = get_nano_timestamp();
     time_consumed = (end - start);
-    // about 0.005ms per file
+    // 4.994193ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
-    logger.info("start test", "over write 1000 existing files");
+    logger.info("start test", "write(out) 1000 existing files");
+    start = get_nano_timestamp();
+    for (auto &&i : file_map) {
+        i.second.open(i.first);
+    }
+    end = get_nano_timestamp();
+    time_consumed = (end - start);
+    // 2.006295ms
+    logger.info("end test", to_string(time_consumed / 1e6) + "ms");
+
+    logger.info("start test", "write(trunc) 1000 existing files");
     start = get_nano_timestamp();
     for (auto &&i : file_map) {
         i.second.open(i.first, std::ios::trunc);
     }
     end = get_nano_timestamp();
     time_consumed = (end - start);
-    // about 0.0001ms per file
+    // 0.052184ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
     logger.info("start test", "close 1000 existed files");
@@ -158,7 +171,7 @@ void benchmark_file() {
     }
     end = get_nano_timestamp();
     time_consumed = (end - start);
-    // about 0.00005ms per file
+    // 4.734932ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 
     logger.info("start test", "remove 1000 files");
@@ -168,7 +181,7 @@ void benchmark_file() {
     }
     end = get_nano_timestamp();
     time_consumed = (end - start);
-    // about 0.01ms per file
+    // 11.515585ms
     logger.info("end test", to_string(time_consumed / 1e6) + "ms");
 }
 
@@ -188,8 +201,9 @@ void random_log_writer(string name, int log_num) {
         // initializing them
         for (size_t i = 0; i < logger_num; i++) {
             logger_vector.push_back(
-                new log2std{name + "_" + to_string(i),
-                            new file_writer{name, "./log/", log2what::MB, 5}});
+                new log2std{name + "_" + to_string(i), new db_writer{"./log/log2.db", 6000}});
+            // new file_writer{}});
+            // new file_writer{name, "./log/", MB, 50}});
         }
         // write random nums of log
         int cycle_to_write = random_int(1, 100);
@@ -211,8 +225,11 @@ void random_log_writer(string name, int log_num) {
 log2std logger{"benchmark", new shell{level::INFO, new writer}};
 
 int main(int argc, char const *argv[]) {
-    benchmark_file();
-    for (size_t i = 0; i < 1; i++) {
+    // benchmark_mkdir();
+    // benchmark_file();
+    size_t total = 0;
+    size_t count = 3;
+    for (size_t i = 0; i < count; i++) {
         logger.info("start mutlti thread writer test", "");
         auto start = get_nano_timestamp();
         thread t1{random_log_writer, "thread1", 250000};
@@ -224,7 +241,10 @@ int main(int argc, char const *argv[]) {
         t3.join();
         t4.join();
         auto end = get_nano_timestamp();
+        // 15660.384017ms
         logger.info("end test", to_string((end - start) / 1e6) + "ms");
+        total += (end - start);
     }
+    logger.info("average ", to_string(total / count / 1e6) + "ms");
     return 0;
 }
