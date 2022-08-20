@@ -1,6 +1,6 @@
+#include "./db_writer.hpp"
 #include "../base/common.hpp"
 #include "../base/log2what.hpp"
-#include "./db_writer.hpp"
 #include <list>
 #include <map>
 #include <mutex>
