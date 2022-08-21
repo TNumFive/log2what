@@ -143,7 +143,12 @@ file_writer::file_writer(const string &file_name, const string &file_dir,
         info.file_dir = file_dir;
         info.file_name = file_name;
         info.map_key = std::move(map_key);
-        mkdir(file_dir);
+        auto dir_ptr = opendir(file_dir.c_str());
+        if (dir_ptr == nullptr) {
+            mkdir(file_dir);
+        } else {
+            closedir(dir_ptr);
+        }
         open_log_file();
     }
 }
