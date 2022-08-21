@@ -1,6 +1,7 @@
 #include "./db_writer.hpp"
 #include "../base/common.hpp"
 #include "../base/log2what.hpp"
+#include <dirent.h>
 #include <list>
 #include <map>
 #include <mutex>
@@ -45,6 +46,8 @@ struct db_info {
     size_t writer_num;
     size_t buffer_size;
     log2 *logger_ptr;
+    bool keep_alive;
+    string url;
     db_info() = default;
     db_info(const db_info &other) = delete;
     db_info(db_info &&other) = delete;
@@ -212,15 +215,24 @@ void db_writer::flush_log_list() {
     }
 }
 
-db_writer::db_writer(const string &url, const size_t buffer_szie, writer *writer_ptr) {
+db_writer::db_writer(const string &url, const size_t buffer_szie,
+                     bool keep_alive, writer *writer_ptr) {
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     auto &info = db_info_map[url];
     db_info_ptr = static_cast<void *>(&info);
     info.writer_num++;
+    info.keep_alive = keep_alive;
     // do not open a second db_ptr if there already exists
     if (info.db_ptr == nullptr) {
         size_t deli = url.find_last_of('/');
-        mkdir(url.substr(0, deli));
+        string file_dir = url.substr(0, deli);
+        auto dir_ptr = opendir(file_dir.c_str());
+        if (dir_ptr == nullptr) {
+            mkdir(url.substr(0, deli));
+        } else {
+            closedir(dir_ptr);
+        }
+        info.url = url;
         info.logger_ptr = new log2{"log2db", writer_ptr};
         if (SQLITE_OK != sqlite3_open(url.c_str(), &info.db_ptr)) {
             info.logger_ptr->error("open db failed", sqlite3_errmsg(info.db_ptr));
@@ -239,6 +251,10 @@ db_writer::~db_writer() {
     auto &info = *(static_cast<db_info *>(db_info_ptr));
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     info.writer_num--;
+    if (info.writer_num == 0 && !info.keep_alive) {
+        string url = std::move(info.url);
+        db_info_map.erase(url);
+    }
 }
 
 void db_writer::write(const level l, const string &module_name, const string &comment, const string &data) {
