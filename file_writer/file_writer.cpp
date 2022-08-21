@@ -8,7 +8,6 @@
 #include <map>
 #include <mutex>
 #include <set>
-#include <thread>
 using namespace log2what;
 using namespace std;
 using std::chrono::milliseconds;
@@ -21,6 +20,7 @@ struct file_info {
     string file_name;
     size_t file_size;
     size_t file_num;
+    bool keep_alive;
     string map_key;
 };
 
@@ -103,7 +103,7 @@ bool file_writer::open_log_file() {
     if (!info.out.is_open() && file_set.size()) {
         // this baiscally happend only once during the lifecycle
         // open the log file wrote last time
-        info.out.open(info.file_dir + *(file_set.end()), ios::app);
+        info.out.open(info.file_dir + *(file_set.rbegin()), ios::app);
         return info.out.is_open();
     }
     info.out.close();
@@ -127,7 +127,9 @@ bool file_writer::open_log_file() {
     return info.out.is_open();
 }
 
-file_writer::file_writer(const string &file_name, const string &file_dir, const size_t file_size, const size_t file_num) {
+file_writer::file_writer(const string &file_name, const string &file_dir,
+                         const size_t file_size, const size_t file_num,
+                         const bool keep_alive) {
     string map_key = file_dir + file_name;
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     auto &info = file_info_map[map_key];
@@ -135,6 +137,7 @@ file_writer::file_writer(const string &file_name, const string &file_dir, const 
     info.writer_num++;
     info.file_size = file_size > 1 ? file_size : 1;
     info.file_num = file_num;
+    info.keep_alive = keep_alive;
     lock_guard<mutex> lock{info.file_mutex};
     if (!info.out.is_open()) {
         info.file_dir = file_dir;
@@ -149,6 +152,10 @@ file_writer::~file_writer() {
     auto &info = *(static_cast<file_info *>(file_info_ptr));
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     info.writer_num--;
+    if (info.writer_num == 0 && !info.keep_alive) {
+        string map_key = std::move(info.map_key);
+        file_info_map.erase(map_key);
+    }
 }
 
 void file_writer::write(const level l, const string &module_name, const string &comment, const string &data) {

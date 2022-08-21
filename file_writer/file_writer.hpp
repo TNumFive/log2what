@@ -13,7 +13,9 @@ class file_writer : public writer {
     virtual bool open_log_file();
 
   public:
-    file_writer(const string &file_name = "root", const string &file_dir = "./log/", const size_t file_size = MB, const size_t file_num = 50);
+    file_writer(const string &file_name = "root", const string &file_dir = "./log/",
+                const size_t file_size = MB, const size_t file_num = 50,
+                const bool keep_alive = true);
     file_writer(const file_writer &other) = delete;
     file_writer(file_writer &&other) = delete;
     file_writer &operator=(const file_writer &other) = delete;
