@@ -6,13 +6,7 @@
 
 namespace log2what
 {
-    using std::string;
-
-    /**
-     * @brief level for log
-     *
-     */
-    enum class level : int
+    enum class log_level : int
     {
         TRACE = 1,
         DEBUG = 2,
@@ -22,40 +16,57 @@ namespace log2what
     };
 
     /**
-     * @brief convert log level enum to string
+     * @brief convert log_level enum to string
      *
-     * @param l enum level
+     * @param level enum level
      * @return string
      */
-    inline string to_string(const level l)
+    inline std::string to_string(const log_level level)
     {
-        switch (l)
+        switch (level)
         {
-        case level::TRACE:
-            return "TRACE";
-        case level::DEBUG:
-            return "DEBUG";
-        case level::INFO:
-            return "INFO ";
-        case level::WARN:
-            return "WARN ";
-        case level::ERROR:
-            return "ERROR";
+        case log_level::TRACE:
+            return "T";
+        case log_level::DEBUG:
+            return "D";
+        case log_level::INFO:
+            return "I";
+        case log_level::WARN:
+            return "W";
+        case log_level::ERROR:
+            return "E";
         default:
-            return "UNDEFINED";
+            return "U";
         }
     }
 
-    /**
-     * @brief convert log level to string
-     *
-     * @param s result string
-     * @param l input level
-     */
-    inline void to_string(string &s, const level l)
+    struct log
     {
-        s = to_string(l);
-    }
+        using string = std::string;
+        int64_t timestamp_nano;
+        log_level level;
+        string module_name;
+        string comment;
+        string data;
+        log(const int64_t timestamp_nano, const log_level level,
+            const string &module_name, const string &comment, const string &data)
+        {
+            this->timestamp_nano = timestamp_nano;
+            this->level = level;
+            this->module_name = module_name;
+            this->comment = comment;
+            this->data = data;
+        }
+        log(const int64_t timestamp_nano, const log_level level,
+            string &&module_name, string &&comment, string &&data)
+        {
+            this->timestamp_nano = timestamp_nano;
+            this->level = level;
+            this->module_name = std::move(module_name);
+            this->comment = std::move(comment);
+            this->data = std::move(data);
+        }
+    };
 
     /**
      * @brief Get the timestamp object
@@ -103,9 +114,9 @@ namespace log2what
      * @param timestamp_sec
      * @return string like 2022-07-30 11:01:52
      */
-    inline string get_localtime_str(const int64_t timestamp_sec)
+    inline std::string get_localtime_str(const int64_t timestamp_sec)
     {
-        char buffer[20];
+        char buffer[sizeof("2022-07-30 11:01:52")];
         std::tm lt = get_localtime_tm(timestamp_sec);
         std::strftime(buffer, sizeof(buffer), "%F %T", &lt);
         return buffer;
@@ -116,12 +127,12 @@ namespace log2what
      *
      * @param dir_path
      */
-    inline void mkdir(const string &dir_path)
+    inline void mkdir(const std::string &dir_path)
     {
 #ifdef __WIN32__
-        string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
+        std::string cmd = "if not exist \"${dir}\" (md \"${dir}\")";
 #else
-        string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
+        std::string cmd = "if [ ! -d \"${dir}\" ]; then \n\tmkdir -p \"${dir}\"\nfi";
 #endif
         cmd.replace(cmd.find("${dir}"), 6, dir_path);
         cmd.replace(cmd.find("${dir}"), 6, dir_path);

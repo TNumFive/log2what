@@ -18,7 +18,7 @@ using log2what::mkdir;
 using writer = log2what::writer;
 using file_writer = log2what::file_writer;
 using db_writer = log2what::db_writer;
-using log2what::level;
+using log2what::log_level;
 using log2what::MB;
 using log2what::shell;
 using std::fstream;
@@ -224,7 +224,7 @@ void random_log_writer(string name, int log_num)
         for (size_t i = 0; i < logger_num; i++)
         {
             logger_vector.push_back(
-                new log2std{name + "_" + to_string(i), new db_writer{"./log/log2.db", 6000}});
+                new log2std{name + "_" + to_string(i), std::make_unique<db_writer>("./log/log2.db", 6000)});
             // new file_writer{}});
             // new file_writer{name, "./log/", MB, 50}});
         }
@@ -247,7 +247,7 @@ void random_log_writer(string name, int log_num)
     }
 }
 
-log2std logger{"benchmark", new shell{level::INFO, new writer}};
+log2std logger{"benchmark", std::make_unique<shell>(log_level::INFO)};
 
 int main(int argc, char const *argv[])
 {

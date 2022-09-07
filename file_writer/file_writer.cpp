@@ -1,10 +1,8 @@
 #include "./file_writer.hpp"
 #include "../base/common.hpp"
-#include <condition_variable>
 #include <dirent.h>
 #include <fstream>
 #include <iomanip>
-#include <list>
 #include <map>
 #include <mutex>
 #include <set>
@@ -36,12 +34,12 @@ constexpr char file_name_deli[] = ".log";
  */
 inline string gen_log_file_suffix()
 {
-    constexpr int SEC_TO_MILLI = 1000;
+    constexpr int sec_to_milli = 1000;
     char buffer[21];
     int64_t timestamp_milli = get_timestamp<milliseconds>();
-    tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
+    tm lt = get_localtime_tm(timestamp_milli / sec_to_milli);
     strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
-    sprintf(&buffer[16], "_%03ld", timestamp_milli % SEC_TO_MILLI);
+    sprintf(&buffer[16], "_%03ld", timestamp_milli % sec_to_milli);
     return buffer;
 }
 
@@ -188,28 +186,35 @@ file_writer::~file_writer()
     }
 }
 
-void file_writer::write(const level l, const string &module_name, const string &comment, const string &data)
+void file_writer::write(const log_level level, const string &module_name,
+                        const string &comment, const string &data,
+                        const int64_t timestamp_nano)
 {
-    constexpr int SEC_TO_MILLI = 1000;
-    int64_t timestamp_milli = get_timestamp<milliseconds>();
-    int64_t timestamp_sec = timestamp_milli / SEC_TO_MILLI;
-    int64_t precision = timestamp_milli % SEC_TO_MILLI;
-    constexpr int fixed_log_length = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
+    constexpr int sec_to_milli = 1000;
+    constexpr int milli_to_nano = 1000000;
+    int64_t timestamp_milli = timestamp_nano
+                                  ? timestamp_nano / milli_to_nano
+                                  : get_timestamp<milliseconds>();
+    int64_t timestamp_sec = timestamp_milli / sec_to_milli;
+    int64_t precision = timestamp_milli % sec_to_milli;
+    constexpr int fixed_length = sizeof("2022-07-30 17:02:38.795 T |%|  |%| \n");
     auto &info = *(static_cast<file_info *>(file_info_ptr));
-    size_t size_to_write = fixed_log_length + module_name.length() + comment.length() + data.length();
+    size_t size_to_write = fixed_length +
+                           module_name.length() +
+                           comment.length() + data.length();
     lock_guard<mutex> lock{info.file_mutex};
     if (info.out.tellp() > info.file_size - size_to_write)
     {
         // exceed size, open new log file
         if (!open_log_file())
         {
-            // open failed ...
+            std::cerr << "log2what::file_writer open file failed" << std::endl;
             return;
         }
     }
     info.out << get_localtime_str(timestamp_sec)
              << "." << setw(3) << setfill('0') << precision
-             << " " << to_string(l)
+             << " " << to_string(level)
              << " " << module_name
              << " |%| " << comment
              << " |%| " << data << "\n";

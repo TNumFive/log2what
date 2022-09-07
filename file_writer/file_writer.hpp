@@ -11,8 +11,9 @@ namespace log2what
     class file_writer : public writer
     {
     private:
+        using string = std::string;
         void *file_info_ptr;
-        virtual bool open_log_file();
+        bool open_log_file();
 
     public:
         file_writer(const string &file_name = "root", const string &file_dir = "./log/",
@@ -23,7 +24,9 @@ namespace log2what
         file_writer &operator=(const file_writer &other) = delete;
         file_writer &operator=(file_writer &&other) = delete;
         ~file_writer() override;
-        void write(const level l, const string &module_name, const string &comment, const string &data) override;
+        void write(const log_level level, const string &module_name,
+                   const string &comment, const string &data,
+                   const int64_t timestamp_nano = 0) override;
     };
 } // namespace log2what
 

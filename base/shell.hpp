@@ -3,6 +3,7 @@
 
 #include "./common.hpp"
 #include "./writer.hpp"
+#include <memory>
 
 namespace log2what
 {
@@ -13,35 +14,33 @@ namespace log2what
     class shell : public writer
     {
     private:
-        writer *writer_ptr;
-        level mask = level::INFO;
+        using string = std::string;
+        std::unique_ptr<writer> writer_uptr;
+        log_level mask = log_level::INFO;
 
     public:
-        shell(writer *writer_ptr = new writer)
+        shell(std::unique_ptr<writer> &&writer_uptr = std::make_unique<writer>())
         {
-            this->writer_ptr = writer_ptr;
+            this->writer_uptr = std::move(writer_uptr);
         };
-        shell(const level mask, writer *writer_ptr = new writer)
+        shell(const log_level mask,
+              std::unique_ptr<writer> &&writer_uptr = std::make_unique<writer>())
         {
             this->mask = mask;
-            this->writer_ptr = writer_ptr;
+            this->writer_uptr = std::move(writer_uptr);
         }
         shell(const shell &other) = delete;
         shell(shell &&other) = delete;
         shell &operator=(const shell &other) = delete;
         shell &operator=(shell &&other) = delete;
-        ~shell() override
-        {
-            if (writer_ptr != nullptr)
-            {
-                delete writer_ptr;
-            }
-        };
-        void write(const level l, const string &module_name, const string &comment, const string &data) override
+        ~shell() override{};
+        void write(const log_level l, const string &module_name,
+                   const string &comment, const string &data,
+                   const int64_t timestamp_nano) override
         {
             if (l >= mask)
             {
-                writer_ptr->write(l, module_name, comment, data);
+                writer_uptr->write(l, module_name, comment, data);
             }
         }
     };
