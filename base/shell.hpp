@@ -15,16 +15,16 @@ namespace log2what
     {
     private:
         using string = std::string;
-        std::unique_ptr<writer> writer_uptr;
+        using up_writer = std::unique_ptr<writer>;
+        up_writer writer_uptr;
         log_level mask = log_level::INFO;
 
     public:
-        shell(std::unique_ptr<writer> &&writer_uptr = std::make_unique<writer>())
+        shell(up_writer &&writer_uptr = std::make_unique<writer>())
         {
             this->writer_uptr = std::move(writer_uptr);
         };
-        shell(const log_level mask,
-              std::unique_ptr<writer> &&writer_uptr = std::make_unique<writer>())
+        shell(const log_level mask, up_writer &&writer_uptr = std::make_unique<writer>())
         {
             this->mask = mask;
             this->writer_uptr = std::move(writer_uptr);

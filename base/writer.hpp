@@ -24,7 +24,7 @@ namespace log2what
         writer &operator=(const writer &other) = delete;
         writer &operator=(writer &&other) = delete;
         virtual ~writer() = default;
-        virtual void write(const log_level l, const string &module_name,
+        virtual void write(const log_level level, const string &module_name,
                            const string &comment, const string &data,
                            const int64_t timestamp_nano = 0)
         {
@@ -35,7 +35,7 @@ namespace log2what
             int64_t precision = (nano % sec_to_nano) / milli_to_nano;
             std::cout << get_localtime_str(sec)
                       << "." << std::setw(3) << std::setfill('0') << precision
-                      << " " << to_string(l)
+                      << " " << to_string(level)
                       << " " << module_name
                       << " |%| " << comment
                       << " |%| " << data << std::endl;
