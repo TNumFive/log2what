@@ -16,6 +16,7 @@ namespace log2what
         using string = std::string;
         using up_writer = std::unique_ptr<writer>;
         using lock_guard = std::lock_guard<std::mutex>;
+        using seconds = std::chrono::seconds;
         up_writer writer_uptr;
         log_level mask = log_level::INFO;
         size_t before;
@@ -52,13 +53,17 @@ namespace log2what
                    const string &comment, const string &data,
                    const int64_t) override
         {
+            lock_guard lock{buffer_mutex};
             if (level >= mask)
             {
                 // triggered
                 if (left_to_write <= 0)
                 {
                     // new trigger
-                    writer_uptr->write(level, "buffered_shell", "triggered", "");
+                    writer_uptr->write(
+                        level, "buffered_shell", "begin",
+                        get_localtime_str(get_timestamp<seconds>()),
+                        log_list.front().timestamp_nano);
                 }
                 for (auto &&l : log_list)
                 {
@@ -66,7 +71,6 @@ namespace log2what
                                        l.comment, l.data, l.timestamp_nano);
                 }
                 writer_uptr->write(level, module_name, comment, data);
-                lock_guard lock{buffer_mutex};
                 log_list.clear();
                 left_to_write = after;
                 return;
@@ -74,15 +78,14 @@ namespace log2what
             if (left_to_write > 0)
             {
                 writer_uptr->write(level, module_name, comment, data);
-                lock_guard lock{buffer_mutex};
                 left_to_write--;
                 if (left_to_write == 0)
                 {
-                    writer_uptr->write(level, "buffered_shell", "output over", "");
+                    writer_uptr->write(level, "buffered_shell", "ended",
+                                       get_localtime_str(get_timestamp<seconds>()));
                 }
                 return;
             }
-            lock_guard lock{buffer_mutex};
             log_list.emplace_back(get_nano_timestamp(), level, module_name, comment, data);
             if (log_list.size() > before)
             {
