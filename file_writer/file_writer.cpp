@@ -1,10 +1,8 @@
 #include "./file_writer.hpp"
 #include "../base/common.hpp"
-#include <condition_variable>
 #include <dirent.h>
 #include <fstream>
 #include <iomanip>
-#include <list>
 #include <map>
 #include <mutex>
 #include <set>
@@ -12,7 +10,8 @@ using namespace log2what;
 using namespace std;
 using std::chrono::milliseconds;
 
-struct file_info {
+struct file_info
+{
     mutex file_mutex;
     ofstream out;
     size_t writer_num;
@@ -33,13 +32,14 @@ constexpr char file_name_deli[] = ".log";
  *
  * @return string like .20220814_105832_204
  */
-inline string gen_log_file_suffix() {
-    constexpr int SEC_TO_MILLI = 1000;
+inline string gen_log_file_suffix()
+{
+    constexpr int sec_to_milli = 1000;
     char buffer[21];
     int64_t timestamp_milli = get_timestamp<milliseconds>();
-    tm lt = get_localtime_tm(timestamp_milli / SEC_TO_MILLI);
+    tm lt = get_localtime_tm(timestamp_milli / sec_to_milli);
     strftime(buffer, sizeof(buffer), ".%Y%m%d_%H%M%S", &lt);
-    sprintf(&buffer[16], "_%03ld", timestamp_milli % SEC_TO_MILLI);
+    sprintf(&buffer[16], "_%03ld", timestamp_milli % sec_to_milli);
     return buffer;
 }
 
@@ -50,11 +50,14 @@ inline string gen_log_file_suffix() {
  * @return true
  * @return false
  */
-inline bool is_log_file(const char *file_suffix) {
+inline bool is_log_file(const char *file_suffix)
+{
     constexpr char low[] = ".log.00000000_000000_000";
     constexpr char top[] = ".log.99991939_295959_999";
-    for (size_t i = 0; i < sizeof(low); i++) {
-        if (file_suffix[i] < low[i] || file_suffix[i] > top[i]) {
+    for (size_t i = 0; i < sizeof(low); i++)
+    {
+        if (file_suffix[i] < low[i] || file_suffix[i] > top[i])
+        {
             return false;
         }
     }
@@ -68,25 +71,32 @@ inline bool is_log_file(const char *file_suffix) {
  * @return true
  * @return false
  */
-inline bool is_log_file(const string &name, const string &file) {
+inline bool is_log_file(const string &name, const string &file)
+{
     size_t size = name.size();
-    for (size_t i = 0; i < size; i++) {
-        if (name[i] != file[i]) {
+    for (size_t i = 0; i < size; i++)
+    {
+        if (name[i] != file[i])
+        {
             return false;
         }
     }
     return is_log_file(&(file.c_str()[size]));
 }
 
-inline set<string> filtered_ls(const string &name, const string &path) {
+inline set<string> filtered_ls(const string &name, const string &path)
+{
     DIR *dir;
     dirent64 *diread;
     dir = opendir(path.c_str());
-    if (dir != nullptr) {
+    if (dir != nullptr)
+    {
         set<string> file_set;
         diread = readdir64(dir);
-        while (diread != nullptr) {
-            if (is_log_file(name, diread->d_name)) {
+        while (diread != nullptr)
+        {
+            if (is_log_file(name, diread->d_name))
+            {
                 file_set.insert(diread->d_name);
             }
             diread = readdir64(dir);
@@ -97,10 +107,12 @@ inline set<string> filtered_ls(const string &name, const string &path) {
     return {};
 }
 
-bool file_writer::open_log_file() {
+bool file_writer::open_log_file()
+{
     auto &info = *(static_cast<file_info *>(file_info_ptr));
     auto file_set = filtered_ls(info.file_name, info.file_dir);
-    if (!info.out.is_open() && file_set.size()) {
+    if (!info.out.is_open() && file_set.size())
+    {
         // this baiscally happend only once during the lifecycle
         // open the log file wrote last time
         info.out.open(info.file_dir + *(file_set.rbegin()), ios::app);
@@ -110,11 +122,15 @@ bool file_writer::open_log_file() {
     // open new log file
     string new_path = info.map_key;
     new_path.append(file_name_deli).append(gen_log_file_suffix());
-    if (file_set.size() < info.file_num) {
+    if (file_set.size() < info.file_num)
+    {
         info.out.open(new_path, ios::app);
-    } else {
+    }
+    else
+    {
         // remove extra files
-        while (file_set.size() > info.file_num) {
+        while (file_set.size() > info.file_num)
+        {
             string file_path = info.file_dir + *(file_set.begin());
             remove(file_path.c_str());
             file_set.erase(*(file_set.begin()));
@@ -129,7 +145,8 @@ bool file_writer::open_log_file() {
 
 file_writer::file_writer(const string &file_name, const string &file_dir,
                          const size_t file_size, const size_t file_num,
-                         const bool keep_alive) {
+                         const bool keep_alive)
+{
     string map_key = file_dir + file_name;
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     auto &info = file_info_map[map_key];
@@ -139,49 +156,65 @@ file_writer::file_writer(const string &file_name, const string &file_dir,
     info.file_num = file_num;
     info.keep_alive = keep_alive;
     lock_guard<mutex> lock{info.file_mutex};
-    if (!info.out.is_open()) {
+    if (!info.out.is_open())
+    {
         info.file_dir = file_dir;
         info.file_name = file_name;
         info.map_key = std::move(map_key);
         auto dir_ptr = opendir(file_dir.c_str());
-        if (dir_ptr == nullptr) {
+        if (dir_ptr == nullptr)
+        {
             mkdir(file_dir);
-        } else {
+        }
+        else
+        {
             closedir(dir_ptr);
         }
         open_log_file();
     }
 }
 
-file_writer::~file_writer() {
+file_writer::~file_writer()
+{
     auto &info = *(static_cast<file_info *>(file_info_ptr));
     lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
     info.writer_num--;
-    if (info.writer_num == 0 && !info.keep_alive) {
+    if (info.writer_num == 0 && !info.keep_alive)
+    {
         string map_key = std::move(info.map_key);
         file_info_map.erase(map_key);
     }
 }
 
-void file_writer::write(const level l, const string &module_name, const string &comment, const string &data) {
-    constexpr int SEC_TO_MILLI = 1000;
-    int64_t timestamp_milli = get_timestamp<milliseconds>();
-    int64_t timestamp_sec = timestamp_milli / SEC_TO_MILLI;
-    int64_t precision = timestamp_milli % SEC_TO_MILLI;
-    constexpr int fixed_log_length = sizeof("2022-07-30 17:02:38.795 TRACE |%|  |%| \n");
+void file_writer::write(const log_level level, const string &module_name,
+                        const string &comment, const string &data,
+                        const int64_t timestamp_nano)
+{
+    constexpr int sec_to_milli = 1000;
+    constexpr int milli_to_nano = 1000000;
+    int64_t timestamp_milli = timestamp_nano
+                                  ? timestamp_nano / milli_to_nano
+                                  : get_timestamp<milliseconds>();
+    int64_t timestamp_sec = timestamp_milli / sec_to_milli;
+    int64_t precision = timestamp_milli % sec_to_milli;
+    constexpr int fixed_length = sizeof("2022-07-30 17:02:38.795 T |%|  |%| \n");
     auto &info = *(static_cast<file_info *>(file_info_ptr));
-    size_t size_to_write = fixed_log_length + module_name.length() + comment.length() + data.length();
+    size_t size_to_write = fixed_length +
+                           module_name.length() +
+                           comment.length() + data.length();
     lock_guard<mutex> lock{info.file_mutex};
-    if (info.out.tellp() > info.file_size - size_to_write) {
+    if (info.out.tellp() > info.file_size - size_to_write)
+    {
         // exceed size, open new log file
-        if (!open_log_file()) {
-            // open failed ...
+        if (!open_log_file())
+        {
+            std::cerr << "log2what::file_writer open file failed" << std::endl;
             return;
         }
     }
     info.out << get_localtime_str(timestamp_sec)
              << "." << setw(3) << setfill('0') << precision
-             << " " << to_string(l)
+             << " " << to_string(level)
              << " " << module_name
              << " |%| " << comment
              << " |%| " << data << "\n";
