@@ -1,5 +1,5 @@
-#ifndef COMMON_HPP
-#define COMMON_HPP
+#ifndef LOG2WHAT_COMMON_HPP
+#define LOG2WHAT_COMMON_HPP
 
 #include <chrono>
 #include <string>

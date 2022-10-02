@@ -1,5 +1,5 @@
-#ifndef WRITER_HPP
-#define WRITER_HPP
+#ifndef LOG2WHAT_WRITER_HPP
+#define LOG2WHAT_WRITER_HPP
 
 #include "./common.hpp"
 #include <iomanip>

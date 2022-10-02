@@ -1,5 +1,5 @@
-#ifndef BUFFERED_SHELL_HPP
-#define BUFFERED_SHELL_HPP
+#ifndef LOG2WHAT_BUFFERED_SHELL_HPP
+#define LOG2WHAT_BUFFERED_SHELL_HPP
 #include "../base/writer.hpp"
 #include <list>
 #include <memory>

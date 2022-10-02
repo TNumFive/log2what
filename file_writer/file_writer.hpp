@@ -1,5 +1,5 @@
-#ifndef FILE_WRITER_HPP
-#define FILE_WRITER_HPP
+#ifndef LOG2WHAT_FILE_WRITER_HPP
+#define LOG2WHAT_FILE_WRITER_HPP
 
 #include "../base/writer.hpp"
 

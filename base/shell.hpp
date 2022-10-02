@@ -1,5 +1,5 @@
-#ifndef SHELL_HPP
-#define SHELL_HPP
+#ifndef LOG2WHAT_SHELL_HPP
+#define LOG2WHAT_SHELL_HPP
 
 #include "./common.hpp"
 #include "./writer.hpp"

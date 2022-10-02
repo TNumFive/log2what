@@ -1,5 +1,5 @@
-#ifndef DB_WRITER_HPP
-#define DB_WRITER_HPP
+#ifndef LOG2WHAT_DB_WRITER_HPP
+#define LOG2WHAT_DB_WRITER_HPP
 
 #include "../base/writer.hpp"
 

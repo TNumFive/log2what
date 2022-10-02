@@ -1,5 +1,5 @@
-#ifndef LOG2_HPP
-#define LOG2_HPP
+#ifndef LOG2WHAT_LOG2_HPP
+#define LOG2WHAT_LOG2_HPP
 
 #include "./common.hpp"
 #include "./writer.hpp"
