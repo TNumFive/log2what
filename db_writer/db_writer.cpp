@@ -1,3 +1,13 @@
+/**
+ * @file db_writer.cpp
+ * @author TNumFive
+ * @brief Implementation of example db_writer.
+ * @version 0.1
+ * @date 2023-01-11
+ *
+ * @copyright Copyright (c) 2023
+ *
+ */
 #include "./db_writer.hpp"
 #include "../base/common.hpp"
 #include "../base/log2what.hpp"
@@ -11,156 +21,187 @@
 using namespace std;
 using namespace log2what;
 
-static constexpr size_t LOG_COLUMN = 5;
-static constexpr size_t LIMIT_VARIABLE_NUMBER = 32766; // https://sqlite.org/c3ref/bind_blob.html
-static constexpr size_t MAX_BUFFER_SIZE = LIMIT_VARIABLE_NUMBER / LOG_COLUMN;
+/**
+ * @brief Every log has 5 columns.
+ *
+ */
+static constexpr size_t log_column = 5;
+/**
+ * @brief The max number of variables to be bind.
+ *
+ * The number is referred by https://sqlite.org/c3ref/bind_blob.html
+ *
+ */
+static constexpr size_t limit_variable_number = 32766;
+/**
+ * @brief The max number of logs to be buffered.
+ *
+ */
+static constexpr size_t max_buffer_size = limit_variable_number / log_column;
 
-struct db_info
+/**
+ * @brief Helper class of sqlite3
+ *
+ */
+class sqlite3_helper
 {
-    mutex db_mutex;
-    sqlite3 *db_ptr;
-    sqlite3_stmt *batch_ptr;
-    list<log> log_list;
-    size_t writer_num;
-    size_t buffer_size;
-    std::unique_ptr<log2> logger_uptr;
-    bool keep_alive;
-    string url;
-    db_info() = default;
-    db_info(const db_info &other) = delete;
-    db_info(db_info &&other) = delete;
-    db_info &operator=(const db_info &other) = delete;
-    db_info &operator=(db_info &&other) = delete;
-    ~db_info()
+public:
+    /**
+     * @brief Construct a new sqlite3 helper object.
+     *
+     * @param file_path Path of database.
+     * @param buffer_size Buffer size of log's buffer.
+     * @param logger_unique_ptr Logger used to write database's logs.
+     */
+    sqlite3_helper(const string file_path, const size_t buffer_size,
+                   unique_ptr<log2one> &&logger_unique_ptr =
+                       unique_ptr<log2one>(new log2one))
     {
-        if (!log_list.empty())
+        this->logger_unique_ptr = std::move(logger_unique_ptr);
+        this->file_path = file_path;
+        size_t delimiter = file_path.find_last_of('/');
+        string file_dir = file_path.substr(0, delimiter);
+        auto dir_ptr = opendir(file_dir.c_str());
+        if (dir_ptr == nullptr)
         {
-            reload_batch_stmt(log_list.size());
-            flush();
+            mkdir(file_path.substr(0, delimiter));
         }
-        if (batch_ptr != nullptr)
+        else
         {
-            if (SQLITE_OK != sqlite3_finalize(batch_ptr))
-            {
-                logger_uptr->error("destruct db_info, finalize stmt failed", sqlite3_errmsg(db_ptr));
-            }
-            batch_ptr = nullptr;
+            closedir(dir_ptr);
         }
-        if (db_ptr != nullptr)
+        if (SQLITE_OK != sqlite3_open(file_path.c_str(), &this->db_ptr))
         {
-            if (SQLITE_OK != sqlite3_close(db_ptr))
+            this->logger_unique_ptr->error("open db failed",
+                                           sqlite3_errmsg(this->db_ptr));
+            return;
+        }
+        if (SQLITE_OK != this->create_table())
+        {
+            return;
+        }
+        this->reload_stmt_ptr(buffer_size <= max_buffer_size ? buffer_size
+                                                             : max_buffer_size);
+    }
+    /**
+     * @brief Copy constructor deleted.
+     *
+     * @param other Other helpre.
+     */
+    sqlite3_helper(const sqlite3_helper &other) = delete;
+    /**
+     * @brief Copy assign constructor deleted.
+     *
+     * @param other Other helpre.
+     * @return sqlite3_helper& Self.
+     */
+    sqlite3_helper &operator=(const sqlite3_helper &other) = delete;
+    /**
+     * @brief Move constructor deleted.
+     *
+     * @param other Other helpre.
+     */
+    sqlite3_helper(sqlite3_helper &&other) = delete;
+    /**
+     * @brief Move assign constructor deleted.
+     *
+     * @param other Other helpre.
+     * @return sqlite3_helper& Self.
+     */
+    sqlite3_helper &operator=(sqlite3_helper &&other) = delete;
+    /**
+     * @brief Destroy the sqlite3 helper object.
+     *
+     */
+    ~sqlite3_helper()
+    {
+        if (this->log_list.size())
+        {
+            this->flush_if_full();
+            if (this->log_list.size())
             {
-                logger_uptr->error("destruct db_info, close db failed", sqlite3_errmsg(db_ptr));
+                this->reload_stmt_ptr(this->log_list.size());
+                this->flush();
             }
-            db_ptr = nullptr;
+        }
+        if (this->stmt_ptr != nullptr)
+        {
+            if (SQLITE_OK != sqlite3_finalize(this->stmt_ptr))
+            {
+                this->logger_unique_ptr->error(
+                    "destructing, finalize stmt failed",
+                    sqlite3_errmsg(this->db_ptr));
+            }
+            this->stmt_ptr = nullptr;
+        }
+        if (this->db_ptr != nullptr)
+        {
+            if (SQLITE_OK != sqlite3_close(this->db_ptr))
+            {
+                this->logger_unique_ptr->error("destructing, close db failed",
+                                               sqlite3_errmsg(this->db_ptr));
+            }
+            this->db_ptr = nullptr;
         }
     }
+    /**
+     * @brief Buffer and write logs to database.
+     *
+     * @param level Log level.
+     * @param module Module name.
+     * @param comment Content of log.
+     * @param data Data attached.
+     * @param timestamp_nano Timestamp of log in nano.
+     */
+    void write(const log_level level, const string &module,
+               const string &comment, const string &data,
+               const int64_t timestamp_nano)
+    {
+        lock_guard<mutex> db_lock{this->db_mutex};
+        this->log_list.emplace_back(timestamp_nano, level, module, comment,
+                                    data);
+        this->flush_if_full();
+    }
+
+private:
+    string file_path;
+    size_t buffer_size;
+    sqlite3 *db_ptr;
+    sqlite3_stmt *stmt_ptr;
+    list<log> log_list;
+    unique_ptr<log2one> logger_unique_ptr;
+    mutex db_mutex;
+
+    /**
+     * @brief Create table for logs when first open database.
+     *
+     * @return int Return SQLITE_OK if no error happened.
+     */
     int create_table()
     {
-        constexpr char create_table[] =
-            "create table if not exists log("
-            "timestamp int primary key not null,"
-            "level int,"
-            "module_name text,"
-            "comment text,"
-            "data text"
-            ");";
-        return sqlite3_exec(db_ptr, create_table, nullptr, nullptr, nullptr);
-    }
-    int flush(sqlite3_stmt *batch_ptr = nullptr)
-    {
-        using leve_type = std::underlying_type_t<log_level>;
-        size_t param_index = 0;
-        int ret = SQLITE_OK;
-        auto cursor = log_list.begin();
-        if (batch_ptr == nullptr)
-        {
-            batch_ptr = this->batch_ptr;
-        }
-        // log_list could be flushed when log_list.size()<buffer_size
-        for (size_t i = 0; i < buffer_size && cursor != log_list.end(); i++)
-        {
-            const auto &l = *cursor;
-            do
-            {
-                ret = sqlite3_bind_int64(batch_ptr, ++param_index, l.timestamp_nano);
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("bind timestamp failed", sqlite3_errmsg(db_ptr));
-                    break;
-                }
-                ret = sqlite3_bind_int64(batch_ptr, ++param_index, static_cast<leve_type>(l.level));
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("bind level failed", sqlite3_errmsg(db_ptr));
-                    break;
-                }
-                ret = sqlite3_bind_text(batch_ptr, ++param_index, l.module_name.c_str(), l.module_name.size(), SQLITE_STATIC);
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("bind module_name failed", sqlite3_errmsg(db_ptr));
-                    break;
-                }
-                ret = sqlite3_bind_text(batch_ptr, ++param_index, l.comment.c_str(), l.comment.size(), SQLITE_STATIC);
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("bind comment failed", sqlite3_errmsg(db_ptr));
-                    break;
-                }
-                ret = sqlite3_bind_text(batch_ptr, ++param_index, l.data.c_str(), l.data.size(), SQLITE_STATIC);
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("bind data failed", sqlite3_errmsg(db_ptr));
-                    break;
-                }
-            } while (false);
-            if (ret != SQLITE_OK && ret != SQLITE_DONE)
-            {
-                break;
-            }
-            else
-            {
-                ret = SQLITE_OK;
-            }
-            cursor++;
-        }
-        if (!ret)
-        {
-            ret = sqlite3_step(batch_ptr);
-            if (ret != SQLITE_DONE)
-            {
-                logger_uptr->error("step stmt failed", sqlite3_errmsg(db_ptr));
-            }
-            else
-            {
-                ret = SQLITE_OK;
-            }
-        }
-        ret = sqlite3_reset(batch_ptr);
+        constexpr char create_table[] = "create table if not exists log("
+                                        "timestamp int primary key not null,"
+                                        "level int,"
+                                        "module text,"
+                                        "comment text,"
+                                        "data text"
+                                        ");";
+        int ret =
+            sqlite3_exec(this->db_ptr, create_table, nullptr, nullptr, nullptr);
         if (ret != SQLITE_OK)
         {
-            logger_uptr->error("reset stmt failed", sqlite3_errmsg(db_ptr));
-        }
-        std::stringstream ss;
-        for (size_t i = 0; i < buffer_size; i++)
-        {
-            auto &l = log_list.front();
-            if (ret)
-            {
-                ss.str("");
-                ss << "("
-                   << l.timestamp_nano << ","
-                   << to_string(l.level) << ","
-                   << l.comment << ","
-                   << l.data
-                   << ")";
-                logger_uptr->error("insert into db failed", ss.str());
-            }
-            log_list.pop_front();
+            this->logger_unique_ptr->error("create_table failed",
+                                           sqlite3_errmsg(this->db_ptr));
         }
         return ret;
     }
-    int prepare_batch_stmt(const size_t buffer_szie, sqlite3_stmt *&batch_ptr)
+    /**
+     * @brief Prepare statement of inserting logs.
+     *
+     * @param buffer_size Write how many logs at once.
+     * @return int Return SQLITE_OK if no error happened.
+     */
+    int prepare_stmt(const size_t buffer_size)
     {
         constexpr char insert[] = "insert into log values";
         constexpr char values[] = "(?,?,?,?,?),";
@@ -171,123 +212,175 @@ struct db_info
         {
             sql.append(values);
         }
-        sql.append(last_value);
-        ret = sqlite3_prepare_v2(db_ptr, sql.c_str(), sql.size(), &batch_ptr, nullptr);
+        if (buffer_size)
+        {
+            sql.append(last_value);
+        }
+        ret = sqlite3_prepare_v2(this->db_ptr, sql.c_str(), sql.size(),
+                                 &this->stmt_ptr, nullptr);
         if (ret != SQLITE_OK)
         {
-            logger_uptr->error("prepare stmt failed", sqlite3_errmsg(db_ptr));
-            batch_ptr = nullptr;
+            this->logger_unique_ptr->error("prepare stmt_ptr failed",
+                                           sqlite3_errmsg(this->db_ptr));
         }
         return ret;
     }
-    int reload_batch_stmt(const size_t buffer_szie)
+    /**
+     * @brief Release the old statement and prepare a new one.
+     *
+     * @param buffer_size Write how many logs at once.
+     * @return int Return SQLITE_OK if no error happened.
+     */
+    int reload_stmt_ptr(const size_t buffer_size)
     {
         int ret = SQLITE_OK;
-        if (this->buffer_size != buffer_szie)
+        this->buffer_size = buffer_size;
+        if (this->stmt_ptr != nullptr)
         {
-            if (batch_ptr != nullptr)
+            ret = sqlite3_finalize(this->stmt_ptr);
+            if (ret != SQLITE_OK)
             {
-                ret = sqlite3_finalize(batch_ptr);
-                if (ret != SQLITE_OK)
-                {
-                    logger_uptr->error("buffer_size changed, finalize stmt failed", sqlite3_errmsg(db_ptr));
-                    batch_ptr = nullptr;
-                    return ret;
-                }
+                this->logger_unique_ptr->error(
+                    "finalize stmt_ptr failed when reload stmt_ptr",
+                    sqlite3_errmsg(this->db_ptr));
+                return ret;
             }
-            this->buffer_size = buffer_szie;
-            return prepare_batch_stmt(buffer_szie, this->batch_ptr);
         }
+        ret = this->prepare_stmt(buffer_size);
         return ret;
     }
-};
-
-// there must only one url to one db
-static map<string, db_info> db_info_map;
-static mutex life_cycle_mutex;
-
-void db_writer::flush_log_list()
-{
-    auto &info = *(static_cast<db_info *>(db_info_ptr));
-    lock_guard<mutex> db_lock{info.db_mutex};
-    if (info.log_list.empty())
+    /**
+     * @brief Flush buffered logs to database.
+     * @details Please make sure that enough logs have been buffered.
+     * @return int Return SQLITE_OK if no error happened.
+     */
+    int flush()
     {
-        return;
-    }
-    sqlite3_stmt *batch_stmt;
-    info.prepare_batch_stmt(info.log_list.size(), batch_stmt);
-    info.flush(batch_stmt);
-    if (batch_stmt != nullptr)
-    {
-        if (SQLITE_OK != sqlite3_finalize(batch_stmt))
+        using level_type = std::underlying_type_t<log_level>;
+        int ret = SQLITE_OK;
+        size_t param_index = 0;
+        list<log> temp_log_list;
+        for (size_t i = 0; i < this->buffer_size; i++)
         {
-            info.logger_uptr->error("destruct batch_stmt, finalize stmt failed", sqlite3_errmsg(info.db_ptr));
+            temp_log_list.push_back(std::move(this->log_list.front()));
+            this->log_list.pop_front();
+            auto &temp_log = temp_log_list.back();
+            ret = sqlite3_bind_int64(this->stmt_ptr, ++param_index,
+                                     temp_log.timestamp_nano);
+            if (ret != SQLITE_OK)
+            {
+                this->logger_unique_ptr->error("bind timestamp failed",
+                                               sqlite3_errmsg(this->db_ptr));
+                break;
+            }
+            ret = sqlite3_bind_int64(this->stmt_ptr, ++param_index,
+                                     static_cast<level_type>(temp_log.level));
+            if (ret != SQLITE_OK)
+            {
+                this->logger_unique_ptr->error("bind level failed",
+                                               sqlite3_errmsg(this->db_ptr));
+                break;
+            }
+            ret = sqlite3_bind_text(this->stmt_ptr, ++param_index,
+                                    temp_log.module.c_str(),
+                                    temp_log.module.size(), SQLITE_STATIC);
+            if (ret != SQLITE_OK)
+            {
+                this->logger_unique_ptr->error("bind module failed",
+                                               sqlite3_errmsg(db_ptr));
+                break;
+            }
+            ret = sqlite3_bind_text(this->stmt_ptr, ++param_index,
+                                    temp_log.comment.c_str(),
+                                    temp_log.comment.size(), SQLITE_STATIC);
+            if (ret != SQLITE_OK)
+            {
+                this->logger_unique_ptr->error("bind comment failed",
+                                               sqlite3_errmsg(db_ptr));
+                break;
+            }
+            ret = sqlite3_bind_text(this->stmt_ptr, ++param_index,
+                                    temp_log.data.c_str(), temp_log.data.size(),
+                                    SQLITE_STATIC);
+            if (ret != SQLITE_OK)
+            {
+                this->logger_unique_ptr->error("bind data failed",
+                                               sqlite3_errmsg(db_ptr));
+                break;
+            }
         }
-        batch_stmt = nullptr;
-    }
-}
-
-db_writer::db_writer(const string &url, const size_t buffer_szie,
-                     bool keep_alive, std::unique_ptr<writer> &&writer_uptr)
-{
-    lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
-    auto &info = db_info_map[url];
-    db_info_ptr = static_cast<void *>(&info);
-    info.writer_num++;
-    info.keep_alive = keep_alive;
-    // do not open a second db_ptr if there already exists
-    if (info.db_ptr == nullptr)
-    {
-        size_t deli = url.find_last_of('/');
-        string file_dir = url.substr(0, deli);
-        auto dir_ptr = opendir(file_dir.c_str());
-        if (dir_ptr == nullptr)
+        if (ret == SQLITE_OK)
         {
-            mkdir(url.substr(0, deli));
+            ret = sqlite3_step(this->stmt_ptr);
+            if (ret != SQLITE_DONE)
+            {
+                this->logger_unique_ptr->error("step stmt failed",
+                                               sqlite3_errmsg(db_ptr));
+            }
         }
         else
         {
-            closedir(dir_ptr);
+            this->logger_unique_ptr->error("error happened when try step stmt");
+            for (auto &temp_log : temp_log_list)
+            {
+                stringstream ss;
+                ss << "{\"comment\":\"" << temp_log.comment << "\", "
+                   << "\"data\":\"" << temp_log.data << "\"}";
+                this->logger_unique_ptr->write(
+                    temp_log.level, to_string(temp_log.timestamp_nano),
+                    ss.str());
+            }
         }
-        info.url = url;
-        info.logger_uptr = make_unique<log2>("log2db", std::move(writer_uptr));
-        if (SQLITE_OK != sqlite3_open(url.c_str(), &info.db_ptr))
+        ret = sqlite3_reset(this->stmt_ptr);
+        if (ret != SQLITE_OK)
         {
-            info.logger_uptr->error("open db failed", sqlite3_errmsg(info.db_ptr));
-            return;
+            this->logger_unique_ptr->error("reset stmt failed",
+                                           sqlite3_errmsg(db_ptr));
         }
-        if (SQLITE_OK != info.create_table())
-        {
-            info.logger_uptr->error("create_table failed", sqlite3_errmsg(info.db_ptr));
-            return;
-        }
+        return ret;
     }
-    lock_guard<mutex> db_lock{info.db_mutex};
-    info.reload_batch_stmt(buffer_szie > MAX_BUFFER_SIZE ? MAX_BUFFER_SIZE : buffer_szie);
-}
-
-db_writer::~db_writer()
-{
-    auto &info = *(static_cast<db_info *>(db_info_ptr));
-    lock_guard<mutex> life_cycle_lock{life_cycle_mutex};
-    info.writer_num--;
-    if (info.writer_num == 0 && !info.keep_alive)
+    /**
+     * @brief Flush logs to database if enough logs have been buffered.
+     *
+     */
+    void flush_if_full()
     {
-        string url = std::move(info.url);
-        db_info_map.erase(url);
+        while (this->log_list.size() >= this->buffer_size)
+        {
+            this->flush();
+        }
     }
+};
+
+static mutex life_cycle_mutex;
+/**
+ * @brief Center map that stores all helper of opened sqlite3 database.
+ *
+ */
+static map<string, unique_ptr<sqlite3_helper>> helper_map;
+
+db_writer::db_writer(const string &file_path, const size_t buffer_szie,
+                     unique_ptr_writer &&writer_unique_ptr)
+{
+    lock_guard<mutex> life_cycle_lock{::life_cycle_mutex};
+    this->file_path = file_path;
+    if (helper_map.count(file_path))
+    {
+        return;
+    }
+    auto logger_unique_ptr = unique_ptr<log2one>{
+        new log2one{"db_writer", std::move(writer_unique_ptr)}};
+    helper_map[file_path].reset(new sqlite3_helper{
+        file_path, buffer_szie, std::move(logger_unique_ptr)});
 }
 
-void db_writer::write(const log_level level, const string &module_name,
+void db_writer::write(const log_level level, const string &module,
                       const string &comment, const string &data,
                       const int64_t timestamp_nano)
 {
-    auto &info = *(static_cast<db_info *>(db_info_ptr));
-    lock_guard<mutex> db_lock{info.db_mutex};
-    int64_t nano = timestamp_nano ? timestamp_nano : get_nano_timestamp();
-    info.log_list.emplace_back(nano, level, module_name, comment, data);
-    while (info.log_list.size() >= info.buffer_size)
-    {
-        info.flush();
-    }
+    unique_lock<mutex> life_cycle_lock{::life_cycle_mutex};
+    auto &helper = helper_map[this->file_path];
+    life_cycle_lock.unlock();
+    int64_t timestamp = timestamp_nano ? timestamp_nano : get_nano_timestamp();
+    helper->write(level, module, comment, data, timestamp);
 }

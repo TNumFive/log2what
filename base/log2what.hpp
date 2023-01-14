@@ -1,3 +1,14 @@
+/**
+ * @file log2what.hpp
+ * @author TNumFive
+ * @brief Logger class defined here.
+ * @version 0.1
+ * @date 2023-01-08
+ *
+ * @copyright Copyright (c) 2023
+ *
+ */
+
 #ifndef LOG2WHAT_LOG2_HPP
 #define LOG2WHAT_LOG2_HPP
 
@@ -10,149 +21,278 @@
 namespace log2what
 {
     /**
-     * @brief base log class
+     * @brief Base class of logger.
+     */
+    class logger
+    {
+    public:
+        using string = std::string;
+        /**
+         * @brief Construct a new logger object.
+         *
+         * @param module Name of module.
+         */
+        logger(string module = "root") { this->module == module; }
+        /**
+         * @brief Copy constructor deleted.
+         *
+         * @param other Other logger.
+         */
+        logger(const logger &other) = delete;
+        /**
+         * @brief Copy assign constructor deleted.
+         *
+         * @param other
+         * @return logger&
+         */
+        logger &operator=(const logger &other) = delete;
+        /**
+         * @brief Defaut Destructor.
+         *
+         */
+        virtual ~logger() = default;
+        /**
+         * @brief Use writer to write log.
+         *
+         * @param level Level of log.
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        virtual void write(const log_level level, const string &comment,
+                           const string &data) = 0;
+        /**
+         * @brief Write trace level log.
+         *
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void trace(const string &comment = "", const string &data = "")
+        {
+            this->write(log_level::TRACE, comment, data);
+        }
+        /**
+         * @brief Write debug level log.
+         *
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void debug(const string &comment = "", const string &data = "")
+        {
+            this->write(log_level::DEBUG, comment, data);
+        }
+        /**
+         * @brief Write info level log.
+         *
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void info(const string &comment = "", const string &data = "")
+        {
+            this->write(log_level::INFO, comment, data);
+        }
+        /**
+         * @brief Write warn level log.
+         *
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void warn(const string &comment = "", const string &data = "")
+        {
+            this->write(log_level::WARN, comment, data);
+        }
+        /**
+         * @brief Write error level log.
+         *
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void error(const string &comment = "", const string &data = "")
+        {
+            this->write(log_level::ERROR, comment, data);
+        }
+
+    protected:
+        string module;
+    };
+
+    /**
+     * @brief Logger with one writer.
      *
      */
-    class log2
+    class log2one : public logger
     {
-    private:
-        using string = std::string;
-        using up_writer = std::unique_ptr<writer>;
-        up_writer writer_uptr;
-        string module_name;
-
     public:
+        using string = logger::string;
+        using unique_ptr_writer = std::unique_ptr<writer>;
         /**
-         * @brief Construct a new log2 object
+         * @brief Default constructor.
          *
-         * @param module_name
-         * @param writer_uptr unique_ptr as destructor will free it
+         * @param module Name of module.
+         * @param writer_unique_ptr Unique pointer of writer.
          */
-        log2(const string &module_name = "root",
-             up_writer &&writer_uptr = std::make_unique<writer>())
+        log2one(const string &module = "root",
+                unique_ptr_writer &&writer_unique_ptr = unique_ptr_writer{
+                    new writer})
         {
-            this->module_name = module_name;
-            this->writer_uptr = std::move(writer_uptr);
+            this->module = module;
+            this->writer_unique_ptr = std::move(writer_unique_ptr);
         }
-        log2(const log2 &other) = delete;
-        log2(log2 &&other)
-        {
-            this->swap(std::move(other));
-        }
-        log2 &operator=(const log2 &other) = delete;
-        log2 &operator=(log2 &&other)
+        /**
+         * @brief Copy constructor deleted.
+         *
+         * @param other Other logger.
+         */
+        log2one(const log2one &other) = delete;
+        /**
+         * @brief Copy assign constructor deleted.
+         *
+         * @param other Other logger.
+         * @return log2one& Self.
+         */
+        log2one &operator=(const log2one &other) = delete;
+        /**
+         * @brief Move constructor.
+         *
+         * @param other Other logger.
+         */
+        log2one(log2one &&other) { this->swap(std::move(other)); }
+        /**
+         * @brief Move assign constructor.
+         *
+         * @param other Other logger.
+         * @return log2one& Self.
+         */
+        log2one &operator=(log2one &&other)
         {
             this->swap(std::move(other));
             return *this;
         }
-        virtual ~log2() {}
-        virtual void swap(log2 &&other)
+        /**
+         * @brief Default destructor.
+         */
+        ~log2one() override = default;
+        /**
+         * @brief Use writer to write log.
+         *
+         * @param level Level of log.
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void write(const log_level level, const string &comment,
+                   const string &data) override
+        {
+            this->writer_unique_ptr->write(level, this->module, comment, data);
+        }
+
+    protected:
+        unique_ptr_writer writer_unique_ptr;
+        /**
+         * @brief Implementation of swap action.
+         *
+         * @param other Other logger.
+         */
+        void swap(log2one &&other)
         {
             if (this != &other)
             {
-                module_name = std::move(other.module_name);
-                writer_uptr = std::move(other.writer_uptr);
+                std::swap(this->module, other.module);
+                std::swap(this->writer_unique_ptr, other.writer_unique_ptr);
             }
-        }
-        virtual void write(const log_level level,
-                           const string &comment, const string &data)
-        {
-            if (writer_uptr)
-            {
-                writer_uptr->write(level, module_name, comment, data);
-            }
-        }
-        virtual void trace(const string &comment = "", const string &data = "")
-        {
-            write(log_level::TRACE, comment, data);
-        }
-        virtual void debug(const string &comment = "", const string &data = "")
-        {
-            write(log_level::DEBUG, comment, data);
-        }
-        virtual void info(const string &comment = "", const string &data = "")
-        {
-            write(log_level::INFO, comment, data);
-        }
-        virtual void warn(const string &comment = "", const string &data = "")
-        {
-            write(log_level::WARN, comment, data);
-        }
-        virtual void error(const string &comment = "", const string &data = "")
-        {
-            write(log_level::ERROR, comment, data);
         }
     };
 
     /**
-     * @brief log2 with list of writers
+     * @brief Logger with lots of writers.
      *
      */
-    class log2lots
+    class log2lots : public logger
     {
-    private:
-        using string = std::string;
-        using up_writer = std::unique_ptr<writer>;
-        std::vector<up_writer> writer_uptr_vector;
-        string module_name;
-
     public:
-        log2lots(const string &module_name = "root")
-        {
-            this->module_name = module_name;
-        }
+        using string = logger::string;
+        using unique_ptr_writer = std::unique_ptr<writer>;
+        /**
+         * @brief Default onstructor.
+         *
+         * @param module Name of module.
+         */
+        log2lots(const string &module = "root") { this->module = module; }
+        /**
+         * @brief Copy constructor deleted.
+         *
+         * @param other Other logger.
+         */
         log2lots(const log2lots &other) = delete;
+        /**
+         * @brief Copy assign constructor deleted.
+         *
+         * @param other Other logger.
+         * @return log2lots& Self.
+         */
         log2lots &operator=(const log2lots &other) = delete;
-        log2lots(log2lots &&other)
-        {
-            this->swap(std::move(other));
-        }
+        /**
+         * @brief Move constructor.
+         *
+         * @param other Other logger.
+         */
+        log2lots(log2lots &&other) { this->swap(std::move(other)); }
+        /**
+         * @brief Move assign constructor.
+         *
+         * @param other Other logger.
+         * @return log2lots& Self.
+         */
         log2lots &operator=(log2lots &&other)
         {
             this->swap(std::move(other));
             return *this;
         }
-        virtual void swap(log2lots &&other)
+        /**
+         * @brief Default destructor.
+         */
+        ~log2lots() override = default;
+        /**
+         * @brief Add writer to writer vector
+         *
+         * @param writer_unique_ptr new unique pointer of writer
+         * @return log2lots Self.
+         */
+        virtual log2lots &append_writer(unique_ptr_writer &&writer_unique_ptr)
+        {
+            this->writer_unique_ptr_vector.push_back(
+                std::move(writer_unique_ptr));
+            return *this;
+        }
+        /**
+         * @brief Use writer to write log.
+         *
+         * @param level Level of log.
+         * @param comment Content of log.
+         * @param data Data attached.
+         */
+        void write(const log_level level, const string &comment,
+                   const string &data) override
+        {
+            for (auto &&writer_unique_ptr : this->writer_unique_ptr_vector)
+            {
+                writer_unique_ptr->write(level, this->module, comment, data);
+            }
+        }
+
+    protected:
+        std::vector<unique_ptr_writer> writer_unique_ptr_vector;
+        /**
+         * @brief Implementation of swap action.
+         *
+         * @param other Other logger.
+         */
+        void swap(log2lots &&other)
         {
             if (this != &other)
             {
-                module_name = std::move(other.module_name);
-                writer_uptr_vector = std::move(other.writer_uptr_vector);
+                std::swap(this->module, other.module);
+                std::swap(this->writer_unique_ptr_vector,
+                          other.writer_unique_ptr_vector);
             }
-        }
-        virtual ~log2lots() {}
-        virtual log2lots &append_writer(up_writer &&writer_uptr)
-        {
-            this->writer_uptr_vector.push_back(std::move(writer_uptr));
-            return *this;
-        }
-        virtual void write(const log_level level,
-                           const string &comment, const string &data)
-        {
-            for (auto &&up : writer_uptr_vector)
-            {
-                up->write(level, module_name, comment, data);
-            }
-        }
-        virtual void trace(const string &comment = "", const string &data = "")
-        {
-            write(log_level::TRACE, comment, data);
-        }
-        virtual void debug(const string &comment = "", const string &data = "")
-        {
-            write(log_level::DEBUG, comment, data);
-        }
-        virtual void info(const string &comment = "", const string &data = "")
-        {
-            write(log_level::INFO, comment, data);
-        }
-        virtual void warn(const string &comment = "", const string &data = "")
-        {
-            write(log_level::WARN, comment, data);
-        }
-        virtual void error(const string &comment = "", const string &data = "")
-        {
-            write(log_level::ERROR, comment, data);
         }
     };
 } // namespace log2what
