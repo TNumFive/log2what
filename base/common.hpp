@@ -31,8 +31,10 @@ namespace log2what
 
     /**
      * @brief Convert log_level enum to string.
+     *
      * @details Use one single letter to represent the log_level. When unknown
      * level is given, the function returns "U", which stands for "Unknwon".
+     *
      * @param level Log level to be converted.
      * @return std::string Result string.
      */

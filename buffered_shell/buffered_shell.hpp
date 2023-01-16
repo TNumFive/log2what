@@ -18,7 +18,6 @@ namespace log2what
 {
     /**
      * @brief Shell that will write buffered log when triggered.
-     *
      */
     class buffered_shell : public writer
     {
@@ -73,7 +72,6 @@ namespace log2what
         buffered_shell &operator=(buffered_shell &&other) = delete;
         /**
          * @brief Default destructor.
-         *
          */
         ~buffered_shell() override = default;
         /**

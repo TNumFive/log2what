@@ -20,7 +20,6 @@ namespace log2what
 {
     /**
      * @brief Base writer class.
-     *
      */
     class writer
     {
@@ -28,7 +27,6 @@ namespace log2what
         using string = std::string;
         /**
          * @brief Default constructor.
-         *
          */
         writer() = default;
         /**

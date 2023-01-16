@@ -24,7 +24,6 @@ constexpr char log_extension[] = ".log";
 
 /**
  * @brief File helper for open, write, remove log files.
- *
  */
 class file_helper
 {
@@ -50,7 +49,6 @@ public:
     }
     /**
      * @brief Default destructor.
-     *
      */
     ~file_helper() = default;
     /**
@@ -188,9 +186,11 @@ private:
     }
     /**
      * @brief Open log file.
+     * 
      * @details Open old log file if exists when fstream is closed; Open new
      * file if log file max nums not exceeded; Reuse and rename old log file if
      * log file max nums met.
+     * 
      * @return true If open log file succeeded.
      * @return false If open log file failed.
      */
@@ -233,6 +233,7 @@ private:
 static mutex life_cycle_mutex;
 /**
  * @brief Map of file helper for different log files.
+ * 
  * @details Make sure only one helper for one {file_dir + file_name}.
  */
 static map<string, unique_ptr<file_helper>> helper_map;

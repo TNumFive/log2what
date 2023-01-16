@@ -23,25 +23,21 @@ using namespace log2what;
 
 /**
  * @brief Every log has 5 columns.
- *
  */
 static constexpr size_t log_column = 5;
 /**
  * @brief The max number of variables to be bind.
- *
- * The number is referred by https://sqlite.org/c3ref/bind_blob.html
- *
+ * 
+ * @details The number is referred by https://sqlite.org/c3ref/bind_blob.html
  */
 static constexpr size_t limit_variable_number = 32766;
 /**
  * @brief The max number of logs to be buffered.
- *
  */
 static constexpr size_t max_buffer_size = limit_variable_number / log_column;
 
 /**
  * @brief Helper class of sqlite3
- *
  */
 class sqlite3_helper
 {
@@ -111,7 +107,6 @@ public:
     sqlite3_helper &operator=(sqlite3_helper &&other) = delete;
     /**
      * @brief Destroy the sqlite3 helper object.
-     *
      */
     ~sqlite3_helper()
     {
@@ -251,7 +246,9 @@ private:
     }
     /**
      * @brief Flush buffered logs to database.
+     * 
      * @details Please make sure that enough logs have been buffered.
+     * 
      * @return int Return SQLITE_OK if no error happened.
      */
     int flush()
@@ -341,7 +338,6 @@ private:
     }
     /**
      * @brief Flush logs to database if enough logs have been buffered.
-     *
      */
     void flush_if_full()
     {
@@ -355,7 +351,6 @@ private:
 static mutex life_cycle_mutex;
 /**
  * @brief Center map that stores all helper of opened sqlite3 database.
- *
  */
 static map<string, unique_ptr<sqlite3_helper>> helper_map;
 

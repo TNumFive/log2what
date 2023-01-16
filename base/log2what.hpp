@@ -42,13 +42,12 @@ namespace log2what
         /**
          * @brief Copy assign constructor deleted.
          *
-         * @param other
+         * @param other Other logger.
          * @return logger&
          */
         logger &operator=(const logger &other) = delete;
         /**
          * @brief Defaut Destructor.
-         *
          */
         virtual ~logger() = default;
         /**
@@ -117,7 +116,6 @@ namespace log2what
 
     /**
      * @brief Logger with one writer.
-     *
      */
     class log2one : public logger
     {
@@ -203,7 +201,6 @@ namespace log2what
 
     /**
      * @brief Logger with lots of writers.
-     *
      */
     class log2lots : public logger
     {

@@ -17,7 +17,6 @@ namespace log2what
 {
     /**
      * @brief Writer that writes log to database(sqlite3).
-     *
      */
     class db_writer : public writer
     {
@@ -63,7 +62,6 @@ namespace log2what
         db_writer &operator=(db_writer &&other) = delete;
         /**
          * @brief Destroy the db writer object
-         *
          */
         ~db_writer() override{};
         /**

@@ -20,7 +20,6 @@ namespace log2what
 
     /**
      * @brief Writer that writes to file.
-     *
      */
     class file_writer : public writer
     {

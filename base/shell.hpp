@@ -19,7 +19,6 @@ namespace log2what
 {
     /**
      * @brief Base shell with function of masking log by log levels.
-     *
      */
     class shell : public writer
     {
