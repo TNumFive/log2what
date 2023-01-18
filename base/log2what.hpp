@@ -153,18 +153,14 @@ namespace log2what
          *
          * @param other Other logger.
          */
-        log2one(log2one &&other) { this->swap(std::move(other)); }
+        log2one(log2one &&other) { this->swap(other); }
         /**
          * @brief Move assign constructor.
          *
          * @param other Other logger.
          * @return log2one& Self.
          */
-        log2one &operator=(log2one &&other)
-        {
-            this->swap(std::move(other));
-            return *this;
-        }
+        log2one &operator=(log2one &&other) { return this->swap(other); }
         /**
          * @brief Default destructor.
          */
@@ -188,14 +184,16 @@ namespace log2what
          * @brief Implementation of swap action.
          *
          * @param other Other logger.
+         * @return log2one& Self.
          */
-        void swap(log2one &&other)
+        log2one &swap(log2one &other)
         {
             if (this != &other)
             {
                 std::swap(this->module, other.module);
                 std::swap(this->writer_unique_ptr, other.writer_unique_ptr);
             }
+            return *this;
         }
     };
 
@@ -231,18 +229,14 @@ namespace log2what
          *
          * @param other Other logger.
          */
-        log2lots(log2lots &&other) { this->swap(std::move(other)); }
+        log2lots(log2lots &&other) { this->swap(other); }
         /**
          * @brief Move assign constructor.
          *
          * @param other Other logger.
          * @return log2lots& Self.
          */
-        log2lots &operator=(log2lots &&other)
-        {
-            this->swap(std::move(other));
-            return *this;
-        }
+        log2lots &operator=(log2lots &&other) { return this->swap(other); }
         /**
          * @brief Default destructor.
          */
@@ -281,8 +275,9 @@ namespace log2what
          * @brief Implementation of swap action.
          *
          * @param other Other logger.
+         * @return log2lots& Self.
          */
-        void swap(log2lots &&other)
+        log2lots &swap(log2lots &other)
         {
             if (this != &other)
             {
@@ -290,6 +285,7 @@ namespace log2what
                 std::swap(this->writer_unique_ptr_vector,
                           other.writer_unique_ptr_vector);
             }
+            return *this;
         }
     };
 } // namespace log2what
